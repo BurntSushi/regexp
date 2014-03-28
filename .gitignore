@@ -1,0 +1,5 @@
+.*.swp
+test-runner
+bench-runner
+doc
+tags
