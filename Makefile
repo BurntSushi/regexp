@@ -21,7 +21,7 @@ docs:
 test: test-runner
 	RUST_TEST_TASKS=1 RUST_LOG=quickcheck,regexp ./test-runner
 
-test-runner: src/lib.rs
+test-runner: src/lib.rs src/parse.rs
 	rustc --test src/lib.rs -o test-runner
 
 test-examples:
