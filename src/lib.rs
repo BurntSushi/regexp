@@ -3,6 +3,9 @@
 #[license = "UNLICENSE"];
 #[doc(html_root_url = "http://burntsushi.net/rustdoc/regexp")];
 
+#[allow(unused_imports)];
+#[allow(dead_code)];
+
 //! Regular expressions for Rust.
 
 #[feature(phase)];
@@ -10,5 +13,6 @@
 #[phase(syntax, link)]
 extern crate log;
 
+mod compile;
 mod parse;
 
