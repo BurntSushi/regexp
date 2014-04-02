@@ -3,14 +3,14 @@ use super::parse::{Literal, Cat, Alt, Rep};
 use super::parse::{ZeroOne, ZeroMore, OneMore, Greedy, Ungreedy};
 
 #[deriving(Show)]
-enum Inst {
+pub enum Inst {
     Char(char),
     Match,
     Jump(uint),
     Split(uint, uint),
 }
 
-fn compile(ast: ~parse::Ast) -> Vec<Inst> {
+pub fn compile(ast: ~parse::Ast) -> Vec<Inst> {
     let mut c = Compiler { insts: Vec::with_capacity(100), };
     c.compile(ast);
     c.insts.push(Match);
@@ -116,6 +116,7 @@ mod test {
     use super::super::parse;
 
     #[test]
+    #[ignore]
     fn simple() {
         let re = match parse::parse("a+b+") {
             Err(err) => fail!("Parse error: {}", err),

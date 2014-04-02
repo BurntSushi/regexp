@@ -15,4 +15,5 @@ extern crate log;
 
 mod compile;
 mod parse;
+mod vm;
 
