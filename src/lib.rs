@@ -33,7 +33,7 @@ pub enum ErrorKind {
 
 impl fmt::Show for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f.buf, "{} error at position {}: {}",
+        write!(f.buf, "{} error near position {}: {}",
             self.kind, self.pos, self.msg)
     }
 }
@@ -70,9 +70,11 @@ mod test {
         // run("(?i:and)rew", "aNdrew"); 
         // run("a+b+?", "abbbbb"); 
         // run("(?s:.+)", "abb\nbbb"); 
-        run("(a*?)+", "aab");
+        // run("(a*)+", "aaa"); 
         // run("(?sm)(.*?)^ab", "\n\n\nab"); 
         // run("(?sm)ab$\n", "ab\n"); 
+        // run("(a{2}){3}", "aaaaaa"); 
+        run("(a{0})b", "aaaaaa");
     }
 
     #[test]

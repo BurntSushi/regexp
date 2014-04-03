@@ -1,10 +1,14 @@
 use std::from_str::FromStr;
+use std::iter;
 use std::str;
 
 use super::{Error, ErrorKind, Bug, BadSyntax};
 
-#[deriving(Show)]
+static MAX_REPEAT: uint = 1000;
+
+#[deriving(Show, Clone)]
 pub enum Ast {
+    Nothing,
     Literal(char, bool),
     Dot(bool),
     Begin(bool),
@@ -15,7 +19,7 @@ pub enum Ast {
     Rep(~Ast, Repeater, Greed),
 }
 
-#[deriving(Show, Eq)]
+#[deriving(Show, Eq, Clone)]
 pub enum Repeater {
     ZeroOne,
     ZeroMore,
@@ -38,7 +42,7 @@ fn from_char<T: FromStr>(c: char) -> Option<T> {
     from_str(str::from_char(c))
 }
 
-#[deriving(Show)]
+#[deriving(Show, Clone)]
 pub enum Greed {
     Greedy,
     Ungreedy,
@@ -174,6 +178,7 @@ impl<'a> Parser<'a> {
             let c = self.cur();
             match c {
                 '?' | '*' | '+' => try!(self.push_repeater(c)),
+                '{' => try!(self.parse_counted()),
                 '(' => {
                     if self.peek_is(1, '?') {
                         self.next_char();
@@ -263,22 +268,8 @@ impl<'a> Parser<'a> {
                     "Double repeat operators are not supported."),
             _ => {},
         }
-        let greed = {
-            if self.peek_is(1, '?') {
-                self.next_char();
-                Ungreedy
-            } else {
-                Greedy
-            }
-        }.swap(self.flags.is_set(SwapGreed));
-
-        // match try!(self.pop_ast()) { 
-            // ~Rep(_, _, _) => 
-                // return self.synerr( 
-                    // "Double repeat operators are not supported."), 
-            // ast => self.push(~Rep(ast, rep, greed)), 
-        // } 
         let ast = try!(self.pop_ast());
+        let greed = self.get_next_greedy();
         self.push(~Rep(ast, rep, greed));
         Ok(())
     }
@@ -302,6 +293,95 @@ impl<'a> Parser<'a> {
                 self.push(~Literal(c, casei))
             }
         }
+        Ok(())
+    }
+
+    // Parses counted repetition. Supports:
+    // {n}, {n,}, {n,m}, {n}?, {n,}? and {n,m}?
+    // Assumes that '{' has already been consumed.
+    fn parse_counted(&mut self) -> Result<(), Error> {
+        let start = self.chari;
+        let closer =
+            match self.chars.iter().skip(start).position(|&c| c == '}') {
+                Some(i) => i,
+                None => return self.synerr(format!(
+                    "No closing brace for counted repetition starting at \
+                     position {}.", start)),
+            };
+        self.chari += closer;
+        let greed = self.get_next_greedy();
+        let inner = str::from_chars(
+            self.chars.as_slice().slice(start + 1, start + closer));
+
+        // Parse the min and max values from the regex.
+        let (mut min, mut max): (uint, Option<uint>);
+        if !inner.contains(",") {
+            min = try!(self.parse_uint(inner));
+            max = Some(min);
+        } else {
+            let pieces: Vec<&str> = inner.splitn(',', 1).collect();
+            let (smin, smax) = (*pieces.get(0), *pieces.get(1));
+            if smin.len() == 0 {
+                return self.synerr("Max repetitions cannot be specified \
+                                    without min repetitions.")
+            }
+            min = try!(self.parse_uint(smin));
+            max =
+                if smax.len() == 0 {
+                    None
+                } else {
+                    Some(try!(self.parse_uint(smax)))
+                };
+        }
+
+        // Do some bounds checking and make sure max >= min.
+        if min > MAX_REPEAT {
+            return self.synerr(format!(
+                "{} exceeds maximum allowed repetitions ({})",
+                min, MAX_REPEAT));
+        }
+        if max.is_some() {
+            let m = max.unwrap();
+            if m > MAX_REPEAT {
+                return self.synerr(format!(
+                    "{} exceeds maximum allowed repetitions ({})",
+                    m, MAX_REPEAT));
+            }
+            if m < min {
+                return self.synerr(format!(
+                    "Max repetitions ({}) cannot be smaller than min \
+                     repetitions ({}).", m, min));
+            }
+        }
+
+        // Now manipulate the AST be repeating elements.
+        if min > 0 && max.is_none() {
+            // Require N copies of what's on the stack and then repeat it.
+            let ast = try!(self.pop_ast());
+            for _ in iter::range(0, min) {
+                self.push(ast.clone())
+            }
+            self.push(~Rep(ast, ZeroMore, greed));
+        } else {
+            // Require N copies of what's on the stack and then repeat it
+            // up to M times optionally.
+            let ast = try!(self.pop_ast());
+            for _ in iter::range(0, min) {
+                self.push(ast.clone())
+            }
+            if max.is_some() {
+                for _ in iter::range(min, max.unwrap()) {
+                    self.push(~Rep(ast.clone(), ZeroOne, greed))
+                }
+            }
+            // It's possible that we popped something off the stack but
+            // never put anything back on it. To keep things simple, add
+            // a no-op expression.
+            if min == 0 && (max.is_none() || max == Some(0)) {
+                self.push(~Nothing)
+            }
+        }
+        debug!("STACK: {}", self.stack);
         Ok(())
     }
 
@@ -351,6 +431,15 @@ impl<'a> Parser<'a> {
         }
         self.synerr(format!(
             "Invalid flags: '{}'", self.slice(start, self.chari)))
+    }
+
+    fn get_next_greedy(&mut self) -> Greed {
+        if self.peek_is(1, '?') {
+            self.next_char();
+            Ungreedy
+        } else {
+            Greedy
+        }.swap(self.flags.is_set(SwapGreed))
     }
 
     fn pos_last(&self, allow_start: bool, pred: |&BuildAst| -> bool)
@@ -406,6 +495,14 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(combined)
+    }
+
+    fn parse_uint(&self, s: &str) -> Result<uint, Error> {
+        match from_str::<uint>(s) {
+            Some(i) => Ok(i),
+            None => self.synerr(format!(
+                "Expected an unsigned integer but got '{}'.", s)),
+        }
     }
 
     fn err<T>(&self, k: ErrorKind, msg: &str) -> Result<T, Error> {

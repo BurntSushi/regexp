@@ -1,5 +1,5 @@
 use super::parse;
-use super::parse::{Literal, Dot, Begin, End, Capture, Cat, Alt, Rep};
+use super::parse::{Nothing, Literal, Dot, Begin, End, Capture, Cat, Alt, Rep};
 use super::parse::{ZeroOne, ZeroMore, OneMore, Greedy, Ungreedy};
 
 type InstIdx = uint;
@@ -55,6 +55,7 @@ struct Compiler {
 impl Compiler {
     fn compile(&mut self, ast: ~parse::Ast) {
         match ast {
+            ~Nothing => {},
             ~Literal(c, casei) => self.push(Char(c, casei)),
             ~Dot(nl) => self.push(Any(nl)),
             ~Begin(multi) => self.push(EmptyBegin(multi)),
