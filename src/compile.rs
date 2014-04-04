@@ -1,5 +1,6 @@
 use super::parse;
-use super::parse::{Nothing, Literal, Dot, Begin, End, Capture, Cat, Alt, Rep};
+use super::parse::{Nothing, Literal, Dot, Class, Begin, End, WordBoundary};
+use super::parse::{Capture, Cat, Alt, Rep};
 use super::parse::{ZeroOne, ZeroMore, OneMore, Greedy, Ungreedy};
 
 type InstIdx = uint;
@@ -12,6 +13,13 @@ pub enum Inst {
     // The Char instruction matches a literal character.
     // If the bool is true, then the match is done case insensitively.
     Char(char, bool),
+
+    // The CharClass instruction tries to match one input character against
+    // the range of characters given.
+    // If the first bool is true, then the character class is negated.
+    // If the second bool is true, then the character class is matched
+    // case insensitively.
+    CharClass(Vec<(char, char)>, bool, bool),
 
     // Matches any character except new lines.
     // If the bool is true, then new lines are matched.
@@ -27,6 +35,12 @@ pub enum Inst {
     // is a new line.
     EmptyEnd(bool),
 
+    // Matches a word boundary (\w on one side and \W \A or \z on the other),
+    // and consumes no character.
+    // If the bool is false, then it matches anything that is NOT a word
+    // boundary.
+    EmptyWordBoundary(bool),
+
     // Saves the current position in the input string to the Nth save slot.
     Save(uint),
 
@@ -39,17 +53,23 @@ pub enum Inst {
     Split(InstIdx, InstIdx),
 }
 
-pub fn compile(ast: ~parse::Ast) -> Vec<Inst> {
-    let mut c = Compiler { insts: Vec::with_capacity(100), };
+pub fn compile(ast: ~parse::Ast) -> (Vec<Inst>, Vec<Option<~str>>) {
+    let mut c = Compiler {
+        insts: Vec::with_capacity(100),
+        names: Vec::with_capacity(10),
+    };
     c.insts.push(Save(0));
     c.compile(ast);
     c.insts.push(Save(1));
     c.insts.push(Match);
-    c.insts
+
+    let names = c.names.clone();
+    (c.insts, names)
 }
 
 struct Compiler {
     insts: Vec<Inst>,
+    names: Vec<Option<~str>>,
 }
 
 impl Compiler {
@@ -58,9 +78,18 @@ impl Compiler {
             ~Nothing => {},
             ~Literal(c, casei) => self.push(Char(c, casei)),
             ~Dot(nl) => self.push(Any(nl)),
+            ~Class(ranges, negated, casei) =>
+                self.push(CharClass(ranges, negated, casei)),
             ~Begin(multi) => self.push(EmptyBegin(multi)),
             ~End(multi) => self.push(EmptyEnd(multi)),
-            ~Capture(cap, x) => {
+            ~WordBoundary(yes) => self.push(EmptyWordBoundary(yes)),
+            ~Capture(cap, name, x) => {
+                let len = self.names.len();
+                if cap >= len {
+                    self.names.grow(10 + cap - len, &None)
+                }
+                *self.names.get_mut(cap) = name;
+
                 self.push(Save(2 * cap));
                 self.compile(x);
                 self.push(Save(2 * cap + 1));

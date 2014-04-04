@@ -1,7 +1,9 @@
 use std::cmp;
 use std::iter;
 use std::mem;
-use super::compile::{Inst, Char, Any, EmptyBegin, EmptyEnd, Match, Save, Jump, Split};
+use super::compile::{Inst, Char, CharClass, Any,
+                     EmptyBegin, EmptyEnd, EmptyWordBoundary,
+                     Match, Save, Jump, Split};
 
 pub fn run(insts: Vec<Inst>, input: &str) -> Option<uint> {
     Vm {
@@ -12,8 +14,8 @@ pub fn run(insts: Vec<Inst>, input: &str) -> Option<uint> {
 
 fn numcaps(insts: &[Inst]) -> uint {
     let mut n = 0;
-    for &inst in insts.iter() {
-        match inst {
+    for inst in insts.iter() {
+        match *inst {
             Save(c) => n = cmp::max(n, c+1),
             _ => {}
         }
@@ -99,8 +101,31 @@ struct Vm {
     input: Vec<char>,
 }
 
+fn class_cmp(casei: bool, mut textc: char,
+             (mut start, mut end): (char, char)) -> Ordering {
+    if casei {
+        // FIXME: This is pretty ridiculous. All of this case conversion
+        // can be moved outside this function:
+        // 1) textc should be uppercased outside the bsearch.
+        // 2) the character class itself should be uppercased either in the
+        //    parser or the compiler.
+        // FIXME: This is too simplistic for correct Unicode support.
+        //        See also: char_eq
+        textc = textc.to_uppercase();
+        start = start.to_uppercase();
+        end = end.to_uppercase();
+    }
+    if textc >= start && textc <= end {
+        Equal
+    } else if start > textc {
+        Greater
+    } else {
+        Less
+    }
+}
+
 impl Vm {
-    fn run(&mut self) -> Option<uint> {
+    fn run(&self) -> Option<uint> {
         let mut matched = None;
         let mut clist = Threads::new(self.insts.len());
         let mut nlist = Threads::new(self.insts.len());
@@ -119,18 +144,31 @@ impl Vm {
                     }
                     Char(c, casei) => {
                         if self.char_eq(casei, ic, c) {
-                            self.add(&mut nlist, pc + 1, ic + 1, clist.groups(i));
+                            self.add(&mut nlist, pc+1, ic+1, clist.groups(i));
                         }
                     }
-                    Any(true) => self.add(&mut nlist, pc + 1, ic + 1, clist.groups(i)),
+                    CharClass(ref ranges, negate, casei) => {
+                        if ic < self.input.len() {
+                            let c = self.get(ic);
+                            let found = ranges.as_slice();
+                            let found = found.bsearch(|&rc| class_cmp(casei, c, rc));
+                            let found = found.is_some();
+                            if (found && !negate) || (!found && negate) {
+                                self.add(&mut nlist, pc+1, ic+1, clist.groups(i));
+                            }
+                        }
+                    }
+                    Any(true) =>
+                        self.add(&mut nlist, pc+1, ic+1, clist.groups(i)),
                     Any(false) => {
                         if !self.char_eq(false, ic, '\n') {
-                            self.add(&mut nlist, pc + 1, ic + 1, clist.groups(i))
+                            self.add(&mut nlist, pc+1, ic+1, clist.groups(i))
                         }
                     }
                     // These cases are handled in 'add'
                     EmptyBegin(_) => {},
                     EmptyEnd(_) => {},
+                    EmptyWordBoundary(_) => {},
                     Save(_) => {},
                     Jump(_) => {},
                     Split(_, _) => {},
@@ -144,9 +182,8 @@ impl Vm {
         matched
     }
 
-    fn add(&mut self, threads: &mut Threads,
-           pc: uint, ic: uint, groups: &mut [uint]) {
-        if threads.contains(pc) {
+    fn add(&self, nlist: &mut Threads, pc: uint, ic: uint, groups: &mut [uint]) {
+        if nlist.contains(pc) {
             return
         }
         // This is absolutely critical to the *correctness* of the VM.
@@ -160,36 +197,65 @@ impl Vm {
         // VM loop, we look for them but simply ignore them.
         // Adding them to the queue prevents them from being revisited so we
         // can avoid cycles (and the inevitable stack overflow).
-        threads.add(pc, groups);
+        nlist.add(pc, groups);
         match *self.insts.get(pc) {
             EmptyBegin(multi) => {
-                if ic == 0 || (multi && self.char_is(ic-1, '\n')) {
-                    self.add(threads, pc + 1, ic, groups)
+                if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {
+                    self.add(nlist, pc + 1, ic, groups)
                 }
             }
             EmptyEnd(multi) => {
-                if ic == self.input.len()
-                   || (multi && self.char_is(ic, '\n')) {
-                    self.add(threads, pc + 1, ic, groups)
+                if self.is_end(ic) || (multi && self.char_is(ic, '\n')) {
+                    self.add(nlist, pc + 1, ic, groups)
+                }
+            }
+            EmptyWordBoundary(yes) => {
+                let wb = self.is_word_boundary(ic);
+                debug!("WORD BOUNDARY: ic:{}, wb:{}", ic, wb);
+                if yes == wb {
+                    self.add(nlist, pc + 1, ic, groups)
                 }
             }
             Save(slot) => {
-                debug!("SAVING {} in slot {}", ic, slot);
                 // clist.save(i, slot, ic); 
                 // let groups = clist.groups(i); 
                 let old = groups[slot];
                 groups[slot] = ic;
-                self.add(threads, pc + 1, ic, groups);
+                self.add(nlist, pc + 1, ic, groups);
                 groups[slot] = old;
             }
-            Jump(to) => self.add(threads, to, ic, groups),
+            Jump(to) => self.add(nlist, to, ic, groups),
             Split(x, y) => {
-                self.add(threads, x, ic, groups);
-                self.add(threads, y, ic, groups);
+                self.add(nlist, x, ic, groups);
+                self.add(nlist, y, ic, groups);
             }
             // Handled in 'run'
-            Match | Char(_, _) | Any(_) => {},
+            Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {},
         }
+    }
+
+    fn is_begin(&self, ic: uint) -> bool { ic == 0 }
+    fn is_end(&self, ic: uint) -> bool { ic == self.input.len() }
+
+    fn is_word_boundary(&self, ic: uint) -> bool {
+        if self.is_begin(ic) {
+            return self.is_word(ic)
+        }
+        if self.is_end(ic) {
+            return self.is_word(self.input.len()-1)
+        }
+        (self.is_word(ic) && !self.is_word(ic-1))
+        || (self.is_word(ic-1) && !self.is_word(ic))
+    }
+
+    fn is_word(&self, ic: uint) -> bool {
+        if ic >= self.input.len() {
+            return false
+        }
+        let c = *self.input.get(ic);
+        c == '_'
+        || (c >= '0' && c <= '9')
+        || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
     }
 
     // FIXME: For case insensitive comparisons, it uses the uppercase
@@ -211,25 +277,5 @@ impl Vm {
 
     fn get(&self, ic: uint) -> char {
         *self.input.get(ic)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::super::parse;
-    use super::super::compile;
-
-    #[test]
-    #[ignore]
-    fn simple() {
-        let re = "a+b+?";
-        let re = match parse::parse(re) {
-            Err(err) => fail!("Parse error: {}", err),
-            Ok(re) => re,
-        };
-        // debug!("RE: {}", re); 
-        let insts = compile::compile(re);
-        debug!("Insts: {}", insts);
-        debug!("{}", super::run(insts, "abbbbbbbc"));
     }
 }

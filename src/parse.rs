@@ -1,8 +1,15 @@
+use std::char;
+use std::cmp;
 use std::from_str::FromStr;
 use std::iter;
+use std::mem;
+use std::num;
 use std::str;
 
 use super::{Error, ErrorKind, Bug, BadSyntax};
+use self::unicode::UNICODE_CLASSES;
+
+mod unicode;
 
 static MAX_REPEAT: uint = 1000;
 
@@ -11,9 +18,11 @@ pub enum Ast {
     Nothing,
     Literal(char, bool),
     Dot(bool),
+    Class(Vec<(char, char)>, bool, bool),
     Begin(bool),
     End(bool),
-    Capture(uint, ~Ast),
+    WordBoundary(bool),
+    Capture(uint, Option<~str>, ~Ast),
     Cat(~Ast, ~Ast),
     Alt(~Ast, ~Ast),
     Rep(~Ast, Repeater, Greed),
@@ -68,30 +77,44 @@ impl Greed {
 #[deriving(Show)]
 enum BuildAst {
     Ast(~Ast),
-    Paren(Flags, uint), // '('
+    Paren(Flags, uint, ~str), // '('
     Bar, // '|'
 }
 
 impl BuildAst {
     fn paren(&self) -> bool {
         match *self {
-            Paren(_, _) => true,
+            Paren(_, _, _) => true,
             _ => false,
         }
     }
 
     fn flags(&self) -> Flags {
         match *self {
-            Paren(flags, _) => flags,
+            Paren(flags, _, _) => flags,
             _ => fail!("Cannot get flags from {}", self),
         }
     }
 
     fn capture(&self) -> Option<uint> {
         match *self {
-            Paren(_, 0) => None,
-            Paren(_, c) => Some(c),
-            _ => fail!("Cannot get flags from {}", self),
+            Paren(_, 0, _) => None,
+            Paren(_, c, _) => Some(c),
+            _ => fail!("Cannot get capture group from {}", self),
+        }
+    }
+
+    fn capture_name(&self) -> Option<~str> {
+        match *self {
+            Paren(_, 0, _) => None,
+            Paren(_, _, ref name) => {
+                if name.len() == 0 {
+                    None
+                } else {
+                    Some(name.clone())
+                }
+            }
+            _ => fail!("Cannot get capture name from {}", self),
         }
     }
 
@@ -162,6 +185,35 @@ struct Parser<'a> {
     caps: uint,
 }
 
+fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
+    // This is currently O(n^2), but I think with sufficient cleverness,
+    // it can be reduced to O(n) **if necessary**.
+    let mut ordered: Vec<(char, char)> = Vec::with_capacity(unordered.len());
+    for (us, ue) in unordered.move_iter() {
+        let (mut us, mut ue) = (us, ue);
+        assert!(us <= ue);
+        let mut which: Option<uint> = None;
+        for (i, &(os, oe)) in ordered.iter().enumerate() {
+            if should_merge((us, ue), (os, oe)) {
+                us = cmp::min(us, os);
+                ue = cmp::max(ue, oe);
+                which = Some(i);
+                break
+            }
+        }
+        match which {
+            None => ordered.push((us, ue)),
+            Some(i) => *ordered.get_mut(i) = (us, ue),
+        }
+    }
+    ordered.sort();
+    ordered
+}
+
+fn should_merge((a, b): (char, char), (x, y): (char, char)) -> bool {
+    cmp::max(a, x) as u32 <= cmp::min(b, y) as u32 + 1
+}
+
 pub fn parse(s: &str) -> Result<~Ast, Error> {
     Parser {
         chars: s.chars().collect(),
@@ -178,7 +230,15 @@ impl<'a> Parser<'a> {
             let c = self.cur();
             match c {
                 '?' | '*' | '+' => try!(self.push_repeater(c)),
+                '\\' => {
+                    let ast = try!(self.parse_escape());
+                    self.push(ast)
+                }
                 '{' => try!(self.parse_counted()),
+                '[' => match self.try_parse_ascii() {
+                    None => try!(self.parse_class()),
+                    Some(class) => self.push(class),
+                },
                 '(' => {
                     if self.peek_is(1, '?') {
                         self.next_char();
@@ -186,7 +246,7 @@ impl<'a> Parser<'a> {
                         try!(self.parse_group_opts())
                     } else {
                         self.caps += 1;
-                        self.stack.push(Paren(self.flags, self.caps))
+                        self.stack.push(Paren(self.flags, self.caps, ~""))
                     }
                 }
                 ')' => {
@@ -198,9 +258,9 @@ impl<'a> Parser<'a> {
                     // Before we smush the alternates together and pop off the
                     // left paren, let's grab the old flags and see if we
                     // need a capture.
-                    let (cap, oldflags) = {
+                    let (cap, cap_name, oldflags) = {
                         let paren = self.stack.get(altfrom-1);
-                        (paren.capture(), paren.flags())
+                        (paren.capture(), paren.capture_name(), paren.flags())
                     };
                     try!(self.alternate(altfrom));
                     self.flags = oldflags;
@@ -209,7 +269,7 @@ impl<'a> Parser<'a> {
                     // alternate and make it a capture.
                     if cap.is_some() {
                         let ast = try!(self.pop_ast());
-                        self.push(~Capture(cap.unwrap(), ast));
+                        self.push(~Capture(cap.unwrap(), cap_name, ast));
                     }
                 }
                 '|' => {
@@ -296,22 +356,141 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    // Parses all forms of character classes.
+    // Assumes that '[' has already been consumed.
+    fn parse_class(&mut self) -> Result<(), Error> {
+        let start = self.chari;
+        let negated = self.peek_is(1, '^');
+        if negated { self.next_char() }
+        let mut ranges: Vec<(char, char)> = vec!();
+        let mut alts: Vec<~Ast> = vec!();
+
+        while self.peek_is(1, '-') {
+            self.next_char();
+            ranges.push(('-', '-'))
+        }
+        if self.peek_is(1, ']') {
+            self.next_char();
+            ranges.push((']', ']'))
+        }
+        self.next_char();
+        while self.chari < self.chars.len() {
+            let mut c = self.cur();
+            match c {
+                '[' =>
+                    match self.try_parse_ascii() {
+                        Some(~Class(asciis, neg, casei)) => {
+                            alts.push(~Class(asciis, neg ^ negated, casei));
+                            self.next_char();
+                            continue
+                        }
+                        Some(ast) => return self.err(Bug, format!(
+                            "Expected Class AST but got '{}'", ast)),
+                        // Just drop down and try to add as a regular character.
+                        None => {},
+                    },
+                '\\' => {
+                    match try!(self.parse_escape()) {
+                        ~Class(asciis, neg, casei) => {
+                            alts.push(~Class(asciis, neg ^ negated, casei));
+                            self.next_char();
+                            continue
+                        }
+                        ~Literal(c2, _) => c = c2, // process below
+                        ~Begin(_) | ~End(_) | ~WordBoundary(_) =>
+                            return self.synerr(
+                                "\\A, \\z, \\b and \\B are not valid escape \
+                                 sequences inside a character class."),
+                        ast => return self.err(Bug, format!(
+                            "Unexpected AST item '{}'", ast)),
+                    }
+                }
+                _ => {},
+            }
+            match c {
+                ']' => {
+                    let mut ast = ~Nothing;
+                    if ranges.len() > 0 {
+                        let casei = self.flags.is_set(CaseI);
+                        ast = ~Class(combine_ranges(ranges), negated, casei);
+                    }
+                    for alt in alts.move_iter() {
+                        ast = ~Alt(alt, ast)
+                    }
+                    self.push(ast);
+                    return Ok(())
+                }
+                c => {
+                    if self.peek_is(1, '-') && !self.peek_is(2, ']') {
+                        self.next_char(); self.next_char();
+                        let c2 = self.cur();
+                        if c2 < c {
+                            return self.synerr(format!(
+                                "Invalid character class range '{}-{}'", c, c2))
+                        }
+                        ranges.push((c, self.cur()))
+                    } else {
+                        ranges.push((c, c))
+                    }
+                }
+            }
+            self.next_char()
+        }
+        self.synerr(format!(
+            "Could not find closing ']' for character class starting \
+             as position {}.", start))
+    }
+
+    // Tries to parse an ASCII character class of the form [:name:].
+    // If successful, returns an AST character class corresponding to name.
+    // If unsuccessful, no state is changed and None is returned.
+    // Assumes that '[' has been parsed.
+    fn try_parse_ascii(&mut self) -> Option<~Ast> {
+        if !self.peek_is(1, ':') {
+            return None
+        }
+        let closer =
+            match self.pos(']') {
+                Some(i) => i,
+                None => return None,
+            };
+        if *self.chars.get(closer-1) != ':' {
+            return None
+        }
+        if closer - self.chari <= 3 {
+            return None
+        }
+        let negated = self.peek_is(2, '^');
+        let mut name_start = self.chari + 2;
+        if negated { name_start += 1 }
+        let name = self.slice(name_start, closer - 1);
+        match find_class(ASCII_CLASSES, name) {
+            None => None,
+            Some(ranges) => {
+                let casei = self.flags.is_set(CaseI);
+                self.chari = closer;
+                Some(~Class(combine_ranges(ranges), negated, casei))
+            }
+        }
+    }
+
     // Parses counted repetition. Supports:
     // {n}, {n,}, {n,m}, {n}?, {n,}? and {n,m}?
     // Assumes that '{' has already been consumed.
     fn parse_counted(&mut self) -> Result<(), Error> {
+        // Scan until the closing '}' and grab the stuff in {}.
         let start = self.chari;
         let closer =
-            match self.chars.iter().skip(start).position(|&c| c == '}') {
+            match self.pos('}') {
                 Some(i) => i,
                 None => return self.synerr(format!(
                     "No closing brace for counted repetition starting at \
                      position {}.", start)),
             };
-        self.chari += closer;
+        self.chari = closer;
         let greed = self.get_next_greedy();
         let inner = str::from_chars(
-            self.chars.as_slice().slice(start + 1, start + closer));
+            self.chars.as_slice().slice(start + 1, closer));
 
         // Parse the min and max values from the regex.
         let (mut min, mut max): (uint, Option<uint>);
@@ -381,13 +560,172 @@ impl<'a> Parser<'a> {
                 self.push(~Nothing)
             }
         }
-        debug!("STACK: {}", self.stack);
+        Ok(())
+    }
+
+    // Parses all escape sequences.
+    // Assumes that '\' has already been consumed.
+    fn parse_escape(&mut self) -> Result<~Ast, Error> {
+        self.next_char();
+        let c = self.cur();
+        if is_punct(c) {
+            return Ok(~Literal(c, false))
+        }
+        match c {
+            'a' => Ok(~Literal('\x07', false)),
+            'f' => Ok(~Literal('\x0C', false)),
+            't' => Ok(~Literal('\t', false)),
+            'n' => Ok(~Literal('\n', false)),
+            'r' => Ok(~Literal('\r', false)),
+            'v' => Ok(~Literal('\x0B', false)),
+            'A' => Ok(~Begin(false)),
+            'z' => Ok(~End(false)),
+            'b' => Ok(~WordBoundary(true)),
+            'B' => Ok(~WordBoundary(false)),
+            '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7' => Ok(try!(self.parse_octal())),
+            'x' => Ok(try!(self.parse_hex())),
+            'p' | 'P' => Ok(try!(self.parse_unicode_name())),
+            'd' | 'D' | 's' | 'S' | 'w' | 'W' => {
+                let name = str::from_char(c.to_lowercase());
+                match find_class(PERL_CLASSES, name) {
+                    None => return self.err(Bug, format!(
+                        "Could not find Perl class '{}'", c)),
+                    Some(ranges) => {
+                        let negated = c.is_uppercase();
+                        let casei = self.flags.is_set(CaseI);
+                        Ok(~Class(combine_ranges(ranges), negated, casei))
+                    }
+                }
+            }
+            _ => self.synerr(format!("Invalid escape sequence '\\\\{}'", c)),
+        }
+    }
+
+    // Parses a unicode character class name, either of the form \pF where
+    // F is a one letter unicode class name or of the form \p{name} where
+    // name is the unicode class name.
+    // Assumes that \p or \P has been read.
+    fn parse_unicode_name(&mut self) -> Result<~Ast, Error> {
+        let negated = self.cur() == 'P';
+        let mut name: ~str;
+        if self.peek_is(1, '{') {
+            self.next_char();
+            let closer =
+                match self.pos('}') {
+                    Some(i) => i,
+                    None => return self.synerr(format!(
+                        "Missing '\\}' for unclosed '\\{' at position {}",
+                        self.chari)),
+                };
+            if closer - self.chari + 1 == 0 {
+                return self.synerr("No Unicode class name found.")
+            }
+            name = self.slice(self.chari + 1, closer);
+            self.chari = closer;
+        } else {
+            if self.chari + 1 >= self.chars.len() {
+                return self.synerr("No single letter Unicode class name found.")
+            }
+            name = self.slice(self.chari + 1, self.chari + 2);
+            self.chari += 1;
+        }
+        match find_class(UNICODE_CLASSES, name) {
+            None => return self.synerr(format!(
+                "Could not find Unicode class '{}'", name)),
+            Some(ranges) => {
+                let casei = self.flags.is_set(CaseI);
+                Ok(~Class(ranges, negated, casei))
+            }
+        }
+    }
+
+    // Parses an octal number, up to 3 digits.
+    // Assumes that \n has been read, where n is the first digit.
+    fn parse_octal(&mut self) -> Result<~Ast, Error> {
+        let start = self.chari;
+        let mut end = start + 1;
+        let (d2, d3) = (self.peek(1), self.peek(2));
+        if d2 >= Some('0') && d2 <= Some('7') {
+            self.next_char();
+            end += 1;
+            if d3 >= Some('0') && d3 <= Some('7') {
+                self.next_char();
+                end += 1;
+            }
+        }
+        let s = self.slice(start, end);
+        match num::from_str_radix::<u32>(s, 8) {
+            Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), false)),
+            None => self.synerr(format!(
+                "Could not parse '{}' as octal number.", s)),
+        }
+    }
+
+    // Parse a hex number. Either exactly two digits or anything in {}.
+    // Assumes that \x has been read.
+    fn parse_hex(&mut self) -> Result<~Ast, Error> {
+        if !self.peek_is(1, '{') {
+            self.next_char();
+            return self.parse_hex_two()
+        }
+        let start = self.chari + 2;
+        let closer =
+            match self.pos('}') {
+                None => return self.synerr(format!(
+                    "Missing '\\}' for unclosed '\\{' at position {}", start)),
+                Some(i) => i,
+            };
+        self.chari = closer;
+        self.parse_hex_digits(self.slice(start, closer))
+    }
+
+    // Parses a two-digit hex number.
+    // Assumes that \xn has been read, where n is the first digit.
+    fn parse_hex_two(&mut self) -> Result<~Ast, Error> {
+        let (start, end) = (self.chari, self.chari + 2);
+        if end > self.chars.len() {
+            return self.synerr(format!(
+                "Invalid hex escape sequence '{}'",
+                self.slice(self.chari - 2, self.chars.len())))
+        }
+        self.next_char();
+        self.parse_hex_digits(self.slice(start, end))
+    }
+
+    fn parse_hex_digits(&self, s: &str) -> Result<~Ast, Error> {
+        match num::from_str_radix::<u32>(s, 16) {
+            Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), false)),
+            None => self.synerr(format!(
+                "Could not parse '{}' as hex number.", s)),
+        }
+    }
+
+    // Parses a named capture.
+    // Assumes that '(?' has been consumed and that the next two characters
+    // are 'P' and '<'.
+    fn parse_named_capture(&mut self) -> Result<(), Error> {
+        self.chari += 2;
+        let closer =
+            match self.pos('>') {
+                Some(i) => i,
+                None => return self.synerr("Capture name must end with '>'."),
+            };
+        if closer - self.chari == 0 {
+            return self.synerr("Capture names must have at least 1 character.")
+        }
+        let name = self.slice(self.chari, closer);
+        self.chari = closer;
+        self.caps += 1;
+        self.stack.push(Paren(self.flags, self.caps, name));
         Ok(())
     }
 
     // Parses non-capture groups and options.
     // Assumes that '(?' has already been consumed.
     fn parse_group_opts(&mut self) -> Result<(), Error> {
+        if self.cur() == 'P' && self.peek_is(1, '<') {
+            return self.parse_named_capture()
+        }
         let start = self.chari;
         let mut flags = self.flags;
         let mut sign = 1;
@@ -419,7 +757,7 @@ impl<'a> Parser<'a> {
                     }
                     if self.cur() == ':' {
                         // Save the old flags with the opening paren.
-                        self.stack.push(Paren(self.flags, 0));
+                        self.stack.push(Paren(self.flags, 0, ~""));
                     }
                     self.flags = flags;
                     return Ok(())
@@ -505,6 +843,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn char_from_u32(&self, n: u32) -> Result<char, Error> {
+        match char::from_u32(n) {
+            Some(c) => Ok(c),
+            None => self.synerr(format!(
+                "Could not decode '{}' to unicode character.", n)),
+        }
+    }
+
+    fn pos(&self, c: char) -> Option<uint> {
+        self.chars.iter()
+            .skip(self.chari).position(|&c2| c2 == c).map(|i| self.chari + i)
+    }
+
     fn err<T>(&self, k: ErrorKind, msg: &str) -> Result<T, Error> {
         Err(Error {
             pos: self.chari,
@@ -536,6 +887,75 @@ impl<'a> Parser<'a> {
         str::from_chars(self.chars.as_slice().slice(start, end))
     }
 }
+
+fn is_punct(c: char) -> bool {
+    match c {
+        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
+        '[' | ']' | '{' | '}' | '^' | '$' => true,
+        _ => false,
+    }
+}
+
+fn find_class(classes: Class, name: &str) -> Option<Vec<(char, char)>> {
+    match classes.bsearch(|&(s, _)| s.cmp(&name)) {
+        Some(i) => Some(Vec::from_slice(classes[i].val1())),
+        None => None,
+    }
+}
+
+type Class = &'static [(&'static str, &'static [(char, char)])];
+
+static ASCII_CLASSES: Class = &[
+    // Classes must be in alphabetical order so that bsearch works.
+    // [:alnum:]      alphanumeric (== [0-9A-Za-z]) 
+    // [:alpha:]      alphabetic (== [A-Za-z]) 
+    // [:ascii:]      ASCII (== [\x00-\x7F]) 
+    // [:blank:]      blank (== [\t ]) 
+    // [:cntrl:]      control (== [\x00-\x1F\x7F]) 
+    // [:digit:]      digits (== [0-9]) 
+    // [:graph:]      graphical (== [!-~])
+    // [:lower:]      lower case (== [a-z]) 
+    // [:print:]      printable (== [ -~] == [ [:graph:]]) 
+    // [:punct:]      punctuation (== [!-/:-@[-`{-~]) 
+    // [:space:]      whitespace (== [\t\n\v\f\r ]) 
+    // [:upper:]      upper case (== [A-Z]) 
+    // [:word:]       word characters (== [0-9A-Za-z_]) 
+    // [:xdigit:]     hex digit (== [0-9A-Fa-f]) 
+    // Taken from: http://golang.org/pkg/regexp/syntax/
+    ("alnum", &[('0', '9'), ('A', 'Z'), ('a', 'z')]),
+    ("alpha", &[('A', 'Z'), ('a', 'z')]),
+    ("ascii", &[('\x00', '\x7F')]),
+    ("blank", &[(' ', ' '), ('\t', '\t')]),
+    ("cntrl", &[('\x00', '\x1F'), ('\x7F', '\x7F')]),
+    ("digit", &[('0', '9')]),
+    ("graph", &[('!', '~')]),
+    ("lower", &[('a', 'z')]),
+    ("print", &[(' ', '~')]),
+    ("punct", &[('!', '/'), (':', '@'), ('[', '`'), ('{', '~')]),
+    ("space", &[('\t', '\t'), ('\n', '\n'), ('\x0B', '\x0B'), ('\x0C', '\x0C'),
+                ('\r', '\r'), (' ', ' ')]),
+    ("upper", &[('A', 'Z')]),
+    ("word", &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')]),
+    ("xdigit", &[('0', '9'), ('A', 'F'), ('a', 'f')]),
+];
+
+static PERL_CLASSES: Class = &[
+    // Classes must be in alphabetical order so that bsearch works.
+    // \d             digits (== [0-9]) 
+    // \D             not digits (== [^0-9]) 
+    // \s             whitespace (== [\t\n\f\r ]) 
+    // \S             not whitespace (== [^\t\n\f\r ]) 
+    // \w             ASCII word characters (== [0-9A-Za-z_]) 
+    // \W             not ASCII word characters (== [^0-9A-Za-z_]) 
+    // Taken from: http://golang.org/pkg/regexp/syntax/
+    //
+    // The negated classes are handled in the parser.
+    ("d", &[('0', '9')]),
+    ("s", &[('\t', '\t'), ('\n', '\n'), ('\x0C', '\x0C'),
+            ('\r', '\r'), (' ', ' ')]),
+    ("w", &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')]),
+];
+
 
 #[cfg(test)]
 mod test {

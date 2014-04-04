@@ -10,6 +10,7 @@
 
 #![feature(phase)]
 
+extern crate collections;
 #[phase(syntax, link)]
 extern crate log;
 
@@ -55,8 +56,9 @@ mod test {
         };
         debug!("AST: {}", re);
 
-        let insts = compile::compile(re);
+        let (insts, cap_names) = compile::compile(re);
         debug!("Insts: {}", insts);
+        debug!("Capture names: {}", cap_names);
 
         let matched = vm::run(insts, text);
         debug!("Matched: {}", matched);
@@ -74,13 +76,26 @@ mod test {
         // run("(?sm)(.*?)^ab", "\n\n\nab"); 
         // run("(?sm)ab$\n", "ab\n"); 
         // run("(a{2}){3}", "aaaaaa"); 
-        run("(a{0})b", "aaaaaa");
+        // run("a{2,}", "aaaaaa"); 
+        // run("[a-z0-9]+", "ab0cdef"); 
+        // run("<([^>])+>", "<strong>hello there</strong>"); 
+        // run("(a|bcdef|g|ab|c|d|e|efg|fg)*", "abcdefg"); 
+        // run("[^[:^alnum:]]+", "abc0123"); 
+
+        // run(r"[\D]+", "abc123abc"); 
+        // run(r".*([a-z]\b)", "andrew gallant"); 
+        // run(r"\**", "**"); 
+        // run(r"[\A]+", "-]a^a-a"); 
+        // run(r"[\p{N}\p{Cherokee}]+", "ᏑⅡᏡⅥ"); 
+        // run(r"\pN+", "ⅡⅢⅳⅥ"); 
+        run("(?i)[^a-z]+", "ANDREW");
     }
 
     #[test]
-    #[ignore]
+    // #[ignore] 
     fn captures() {
-        run("(a)b", "ab");
-        run("(?sm)(.*)^\nab", "\n\n\nab");
+        // run("(a)b", "ab"); 
+        // run("(?sm)(.*)^\nab", "\n\n\nab"); 
+        // run(r"(?P<wat>\d+)a(?P<a>\d+)", "123a456"); 
     }
 }

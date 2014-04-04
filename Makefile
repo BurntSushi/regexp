@@ -21,7 +21,7 @@ docs:
 test: test-runner
 	RUST_TEST_TASKS=1 RUST_LOG=quickcheck,regexp ./test-runner
 
-test-runner: src/lib.rs src/parse.rs src/compile.rs src/vm.rs
+test-runner: src/lib.rs src/parse.rs src/compile.rs src/vm.rs src/unicode.rs
 	rustc --test src/lib.rs -o test-runner
 
 test-examples:
@@ -30,7 +30,7 @@ test-examples:
 bench: bench-runner
 	RUST_TEST_TASKS=1 RUST_LOG=quickcheck,regexp ./bench-runner --bench
 
-bench-runner: src/lib.rs src/parse.rs src/compile.rs src/vm.rs
+bench-runner: src/lib.rs src/parse.rs src/compile.rs src/vm.rs src/unicode.rs
 	rustc --opt-level=3 --test $(RUST_CFG) src/lib.rs -o bench-runner
 
 test-clean:
