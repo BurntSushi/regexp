@@ -58,6 +58,12 @@ pub fn compile(ast: ~parse::Ast) -> (Vec<Inst>, Vec<Option<~str>>) {
         insts: Vec::with_capacity(100),
         names: Vec::with_capacity(10),
     };
+
+    // Start instructions with a '.*?' so that matching isn't anchored to
+    // the start of the input by default. Any text matched by the initial
+    // '.*?' isn't included in the overall match.
+    c.star(~Dot(true), Ungreedy);
+
     c.insts.push(Save(0));
     c.compile(ast);
     c.insts.push(Save(1));
@@ -120,19 +126,7 @@ impl Compiler {
                 }
             }
             ~Rep(x, ZeroMore, g) => {
-                let j1 = self.insts.len();
-                let split = self.empty_split();
-                let j2 = self.insts.len();
-                self.compile(x);
-                let jmp = self.empty_jump();
-                let j3 = self.insts.len();
-
-                self.set_jump(jmp, j1);
-                if g.is_greedy() {
-                    self.set_split(split, j2, j3);
-                } else {
-                    self.set_split(split, j3, j2);
-                }
+                self.star(x, g);
             }
             ~Rep(x, OneMore, g) => {
                 let j1 = self.insts.len();
@@ -176,6 +170,22 @@ impl Compiler {
         match *jmp {
             Jump(_) => *jmp = Jump(pc),
             _ => fail!("BUG: Invalid jump index."),
+        }
+    }
+
+    fn star(&mut self, sub: ~parse::Ast, greed: parse::Greed) {
+        let j1 = self.insts.len();
+        let split = self.empty_split();
+        let j2 = self.insts.len();
+        self.compile(sub);
+        let jmp = self.empty_jump();
+        let j3 = self.insts.len();
+
+        self.set_jump(jmp, j1);
+        if greed.is_greedy() {
+            self.set_split(split, j2, j3);
+        } else {
+            self.set_split(split, j3, j2);
         }
     }
 }

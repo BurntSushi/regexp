@@ -5,7 +5,7 @@ use super::compile::{Inst, Char, CharClass, Any,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
-pub fn run(insts: Vec<Inst>, input: &str) -> Option<uint> {
+pub fn run(insts: &[Inst], input: &str) -> Option<Vec<uint>> {
     Vm {
         insts: insts,
         input: input.chars().collect(),
@@ -96,8 +96,8 @@ impl Threads {
     }
 }
 
-struct Vm {
-    insts: Vec<Inst>,
+struct Vm<'r> {
+    insts: &'r [Inst],
     input: Vec<char>,
 }
 
@@ -124,9 +124,9 @@ fn class_cmp(casei: bool, mut textc: char,
     }
 }
 
-impl Vm {
-    fn run(&self) -> Option<uint> {
-        let mut matched = None;
+impl<'r> Vm<'r> {
+    fn run(&self) -> Option<Vec<uint>> {
+        let mut matched = false;
         let mut clist = Threads::new(self.insts.len());
         let mut nlist = Threads::new(self.insts.len());
         let mut groups = Vec::from_elem(numcaps(self.insts.as_slice()), 0u);
@@ -136,9 +136,9 @@ impl Vm {
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match *self.insts.get(pc) {
+                match self.insts[pc] {
                     Match => {
-                        matched = Some(ic);
+                        matched = true;
                         groups = Vec::from_slice(clist.groups(i));
                         clist.empty();
                     }
@@ -178,8 +178,11 @@ impl Vm {
             mem::swap(&mut clist, &mut nlist);
             nlist.empty();
         }
-        debug!("GROUPS: {}", groups);
-        matched
+        if matched {
+            Some(groups)
+        } else {
+            None
+        }
     }
 
     fn add(&self, nlist: &mut Threads, pc: uint, ic: uint, groups: &mut [uint]) {
@@ -198,7 +201,7 @@ impl Vm {
         // Adding them to the queue prevents them from being revisited so we
         // can avoid cycles (and the inevitable stack overflow).
         nlist.add(pc, groups);
-        match *self.insts.get(pc) {
+        match self.insts[pc] {
             EmptyBegin(multi) => {
                 if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {
                     self.add(nlist, pc + 1, ic, groups)

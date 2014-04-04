@@ -18,6 +18,7 @@ use std::fmt;
 
 mod compile;
 mod parse;
+mod regexp;
 mod vm;
 
 pub struct Error {
@@ -43,9 +44,10 @@ impl fmt::Show for Error {
 mod test {
     use super::compile;
     use super::parse;
+    use super::regexp::{Regexp, to_byte_indices};
     use super::vm;
 
-    fn run(regexp: &str, text: &str) {
+    fn run_manual(regexp: &str, text: &str) {
         debug!("\n--------------------------------");
         debug!("RE: {}", regexp);
         debug!("Text: {}", text);
@@ -60,10 +62,25 @@ mod test {
         debug!("Insts: {}", insts);
         debug!("Capture names: {}", cap_names);
 
-        let matched = vm::run(insts, text);
+        let matched = vm::run(insts.as_slice(), text);
         debug!("Matched: {}", matched);
 
         debug!("--------------------------------");
+    }
+
+    fn run(re: &str, text: &str) {
+        let r = match Regexp::new(re) {
+            Err(err) => fail!("{}", err),
+            Ok(r) => r,
+        };
+        for (s, e) in r.find_iter(text) {
+            debug!("Matched: {} ({})", (s, e), text.slice(s, e));
+        }
+        let gs = r.captures(text).unwrap();
+        let all: Vec<&str> = gs.subs().collect();
+        debug!("All: {}, First: {}, Second: {}", all, gs.at(0), gs.at(1));
+        debug!("Named: {}", gs.name("sec"));
+
     }
 
     #[test]
@@ -86,9 +103,14 @@ mod test {
         // run(r".*([a-z]\b)", "andrew gallant"); 
         // run(r"\**", "**"); 
         // run(r"[\A]+", "-]a^a-a"); 
-        // run(r"[\p{N}\p{Cherokee}]+", "ᏑⅡᏡⅥ"); 
-        // run(r"\pN+", "ⅡⅢⅳⅥ"); 
-        run("(?i)[^a-z]+", "ANDREW");
+        // run(r"[^\P{N}\P{Cherokee}]+", "aᏑⅡᏡⅥ"); 
+        // run(r"[^\P{N}\P{Cherokee}]+", "aᏑⅡᏡⅥ"); 
+        // run("(?i)[^a-z]+", "ANDREW"); 
+
+        // run(r"dre", "andrew dr. dre yo"); 
+
+        let roman = ~"ⅡⅢⅳⅥ";
+        run(r"\pN(?P<sec>\pN)", roman);
     }
 
     #[test]
