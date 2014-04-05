@@ -15,6 +15,8 @@ extern crate collections;
 extern crate log;
 
 use std::fmt;
+use std::str;
+use parse::is_punct;
 
 pub use regexp::{Regexp, Captures, SubCaptures, FindCaptures, FindMatches};
 pub use regexp::{RegexpSplits, RegexpSplitsN};
@@ -49,6 +51,19 @@ impl fmt::Show for Error {
     }
 }
 
+/// Escapes all regular expression meta characters in `s` so that it may be
+/// safely used in a regular expression as a literal string.
+pub fn quote(s: &str) -> ~str {
+    let mut quoted = str::with_capacity(s.len());
+    for c in s.chars() {
+        if is_punct(c) {
+            quoted.push_char('\\')
+        }
+        quoted.push_char(c);
+    }
+    quoted
+}
+
 #[cfg(test)]
 mod test {
     use super::compile;
@@ -60,7 +75,7 @@ mod test {
     fn other() {
         let r = Regexp::new(r"(\S+)\s+(?P<last>\S+)").unwrap();
         let text = "andrew gallant";
-        debug!("Replaced: {}", r.replace_all(text, "$last, $$wat $1"));
+        debug!("Replaced: {}", r.replace_all(text, "$last,$wat $1"));
 
         // let r = Regexp::new("a+").unwrap(); 
         // let text = "aaaawhoa"; 

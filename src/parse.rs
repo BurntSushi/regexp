@@ -893,7 +893,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn is_punct(c: char) -> bool {
+pub fn is_punct(c: char) -> bool {
     match c {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
         '[' | ']' | '{' | '}' | '^' | '$' => true,

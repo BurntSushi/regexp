@@ -111,7 +111,7 @@ impl Regexp {
 
     /// Replaces the leftmost-longest match with the replacement provided.
     /// The replacement can be a regular string (where `$N` and `$name` are
-    /// expanded to match capture groups) or a function that takes the matche's
+    /// expanded to match capture groups) or a function that takes the matches' 
     /// `Captures` and returns the replaced string.
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
@@ -151,10 +151,17 @@ impl Regexp {
 pub struct NoExpand<'r>(pub &'r str);
 
 /// Expands all instances of `$name` in `text` to the corresponding capture
-/// group `name`. `name` may be an integer corresponding to the index of the
+/// group `name`.
+///
+/// `name` may be an integer corresponding to the index of the
 /// capture group (counted by order of opening parenthesis where `0` is the
 /// entire match) or it can be a name (consisting of letters, digits or 
 /// underscores) corresponding to a named capture group.
+///
+/// If `name` isn't a valid capture group (whether the name doesn't exist or
+/// isn't a valid index), then it is replaced with the empty string.
+///
+/// To write a literal `$` use `$$`.
 pub fn expand(caps: &Captures, text: &str) -> ~str {
     // How evil can you get?
     // FIXME: Don't use regexes for this. It's completely unnecessary.
