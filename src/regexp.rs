@@ -195,7 +195,7 @@ pub fn expand(caps: &Captures, text: &str) -> ~str {
 }
 
 /// Replacer describes types that can be used to replace matches in a string.
-trait Replacer {
+pub trait Replacer {
     fn replace(&self, caps: &Captures) -> ~str;
 }
 

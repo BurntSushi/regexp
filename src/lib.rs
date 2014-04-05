@@ -19,7 +19,7 @@ use std::str;
 use parse::is_punct;
 
 pub use regexp::{Regexp, Captures, SubCaptures, FindCaptures, FindMatches};
-pub use regexp::{RegexpSplits, RegexpSplitsN};
+pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
 
 mod compile;
 mod parse;
