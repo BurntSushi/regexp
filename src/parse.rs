@@ -714,6 +714,11 @@ impl<'a> Parser<'a> {
             return self.synerr("Capture names must have at least 1 character.")
         }
         let name = self.slice(self.chari, closer);
+        if !name.chars().all(is_valid_cap) {
+            return self.synerr(
+                "Capture names must can only have underscores, \
+                 letters and digits.")
+        }
         self.chari = closer;
         self.caps += 1;
         self.stack.push(Paren(self.flags, self.caps, name));
@@ -894,6 +899,11 @@ fn is_punct(c: char) -> bool {
         '[' | ']' | '{' | '}' | '^' | '$' => true,
         _ => false,
     }
+}
+
+fn is_valid_cap(c: char) -> bool {
+    c == '_' || (c >= '0' && c <= '9')
+    || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 fn find_class(classes: Class, name: &str) -> Option<Vec<(char, char)>> {

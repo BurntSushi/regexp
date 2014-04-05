@@ -24,12 +24,18 @@ mod parse;
 mod regexp;
 mod vm;
 
+/// Error corresponds to something that can go wrong while parsing or compiling
+/// a regular expression.
+///
+/// (Once an expression is compiled, it is not possible to produce an error
+/// via searching, splitting or replacing.)
 pub struct Error {
     pub pos: uint,
     pub kind: ErrorKind,
     pub msg: ~str,
 }
 
+/// Describes the type of the error returned.
 #[deriving(Show)]
 pub enum ErrorKind {
     Bug,
@@ -47,8 +53,21 @@ impl fmt::Show for Error {
 mod test {
     use super::compile;
     use super::parse;
-    use super::regexp::{Regexp, to_byte_indices};
+    use super::regexp::{Regexp, NoExpand};
     use super::vm;
+
+    #[test]
+    fn other() {
+        let r = Regexp::new(r"(\S+)\s+(?P<last>\S+)").unwrap();
+        let text = "andrew gallant";
+        debug!("Replaced: {}", r.replace_all(text, "$last, $$wat $1"));
+
+        // let r = Regexp::new("a+").unwrap(); 
+        // let text = "aaaawhoa"; 
+        // for m in r.captures_iter(text) { 
+            // debug!("Match: {} (pos: {})", m.at(0), m.pos(0)); 
+        // } 
+    }
 
     fn run_manual(regexp: &str, text: &str) {
         debug!("\n--------------------------------");
@@ -90,7 +109,7 @@ mod test {
     }
 
     #[test]
-    // #[ignore] 
+    #[ignore]
     fn simple() {
         // run("(?i:and)rew", "aNdrew"); 
         // run("a+b+?", "abbbbb"); 

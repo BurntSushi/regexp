@@ -1,5 +1,7 @@
 use collections::HashMap;
+use std::from_str::from_str;
 use std::slice;
+use std::str;
 
 use super::Error;
 use super::compile::{Inst, compile};
@@ -13,7 +15,7 @@ pub struct Regexp {
     names: Vec<Option<~str>>,
 }
 
-pub fn to_byte_indices(s: &str, ulocs: CaptureIndices) -> CaptureIndices {
+fn to_byte_indices(s: &str, ulocs: CaptureIndices) -> CaptureIndices {
     // FIXME: This seems incredibly slow and unfortunate and I think it can
     // be removed completely.
     // I wonder if there is a way to get the VM to return byte indices easily.
@@ -53,6 +55,8 @@ pub fn to_byte_indices(s: &str, ulocs: CaptureIndices) -> CaptureIndices {
 }
 
 impl Regexp {
+    /// Creates a new compiled regular expression. Once compiled, it can be
+    /// used repeatedly to search, split or replace text in a string.
     pub fn new(s: &str) -> Result<Regexp, Error> {
         let ast = try!(parse(s));
         let (insts, cap_names) = compile(ast);
@@ -101,9 +105,9 @@ impl Regexp {
                 None => return None,
                 Some(locs) => locs,
             };
-        let &(s, e) = locs.get(0);
-        let full_match = text.slice(s, e).to_owned();
-        Some(Captures::from_locs(full_match, self.names.as_slice(), locs))
+        let &(_, e) = locs.get(0);
+        let max_match = text.slice(0, e).to_owned();
+        Some(Captures::from_locs(max_match, self.names.as_slice(), locs))
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -113,6 +117,7 @@ impl Regexp {
         FindCaptures {
             re: self,
             text: text.to_owned(),
+            last_match: 0,
             last_end: 0,
         }
     }
@@ -142,8 +147,93 @@ impl Regexp {
             limit: limit,
         }
     }
+
+    /// Replaces the leftmost-longest match with the replacement provided.
+    /// The replacement can be a regular string (where `$N` and `$name` are
+    /// expanded to match capture groups) or a function that takes the matche's
+    /// `Captures` and returns the replaced string.
+    ///
+    /// If no match is found, then a copy of the string is returned unchanged.
+    pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+        let caps =
+            match self.captures(text) {
+                None => return ~"",
+                Some(caps) => caps,
+            };
+        let mut new = str::with_capacity(text.len());
+        let (s, e) = caps.pos(0);
+        new.push_str(text.slice(0, s));
+        new.push_str(rep.replace(&caps));
+        new.push_str(text.slice(e, text.len()));
+        new
+    }
+
+    /// Replaces all non-overlapping matches in `text` with the replacement
+    /// provided.
+    pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+        let mut new = str::with_capacity(text.len());
+        let mut last_match = 0u;
+        for cap in self.captures_iter(text) {
+            let (s, e) = cap.pos(0);
+            new.push_str(text.slice(last_match, s));
+            new.push_str(rep.replace(&cap));
+            last_match = e;
+        }
+        new.push_str(text.slice(last_match, text.len()));
+        new
+    }
 }
 
+/// NoExpand can be used with `replace` and `replace_all` to do a literal
+/// string replacement without expanding `$name` to their corresponding
+/// capture groups.
+pub struct NoExpand<'r>(pub &'r str);
+
+/// Expands all instances of `$name` in `text` to the corresponding capture
+/// group `name`. `name` may be an integer corresponding to the index of the
+/// capture group (counted by order of opening parenthesis where `0` is the
+/// entire match) or it can be a name (consisting of letters, digits or 
+/// underscores) corresponding to a named capture group.
+pub fn expand(caps: &Captures, text: &str) -> ~str {
+    // How evil can you get?
+    // FIXME: Don't use regexes for this. It's completely unnecessary.
+    // FIXME: Marginal improvement: get a syntax extension re! to prevent
+    //        recompilation every time.
+    let re = Regexp::new(r"(^|[^$])\$(\w+)").unwrap();
+    re.replace_all(text, |refs: &Captures| -> ~str {
+        let (pre, name) = (refs.at(1), refs.at(2));
+        pre + match from_str::<uint>(name) {
+            None => caps.name(name).to_owned(),
+            Some(i) => caps.at(i).to_owned(),
+        }
+    })
+}
+
+/// Replacer describes types that can be used to replace matches in a string.
+trait Replacer {
+    fn replace(&self, caps: &Captures) -> ~str;
+}
+
+impl<'r> Replacer for NoExpand<'r> {
+    fn replace(&self, _: &Captures) -> ~str {
+        let NoExpand(s) = *self;
+        s.to_owned()
+    }
+}
+
+impl<'r> Replacer for &'r str {
+    fn replace(&self, caps: &Captures) -> ~str {
+        expand(caps, *self)
+    }
+}
+
+impl<'r> Replacer for 'r |&Captures| -> ~str {
+    fn replace(&self, caps: &Captures) -> ~str {
+        (*self)(caps)
+    }
+}
+
+/// Yields all substrings delimited by a regular expression match.
 pub struct RegexpSplits<'r, 't> {
     finder: FindMatches<'r>,
     text: &'t str,
@@ -171,6 +261,9 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
     }
 }
 
+/// Yields at most `N` substrings delimited by a regular expression match.
+///
+/// The last substring will be whatever remains after splitting.
 pub struct RegexpSplitsN<'r, 't> {
     splits: RegexpSplits<'r, 't>,
     cur: uint,
@@ -194,15 +287,17 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 }
 
 /// Captures represents a group of captured strings for a single match.
+///
 /// The 0th capture always corresponds to the entire match. Each subsequent
 /// index corresponds to the next capture group in the regex.
 /// If a capture group is named, then the matched string is *also* available
 /// via the `name` method. (Note that the 0th capture is always unnamed and so
 /// must be accessed with the `at` method.)
 pub struct Captures {
-    full_match: ~str,
+    max_match: ~str,
     locs: CaptureIndices,
     named: HashMap<~str, uint>,
+    offset: uint,
 }
 
 impl Captures {
@@ -220,10 +315,17 @@ impl Captures {
             }
         }
         Captures {
-            full_match: s,
+            max_match: s,
             locs: locs,
             named: named,
+            offset: 0,
         }
+    }
+
+    /// Adds offset to each location in the captures so that `pos` always
+    /// returns byte indices in the original string.
+    fn adjust_locations(&mut self, offset: uint) {
+        self.offset = offset;
     }
 
     /// Returns the matched string for the capture group `i`.
@@ -233,7 +335,7 @@ impl Captures {
             return ""
         }
         let &(s, e) = self.locs.get(i);
-        self.full_match.slice(s, e)
+        self.max_match.slice(s, e)
     }
 
     /// Returns the matched string for the capture group named `name`.
@@ -244,6 +346,18 @@ impl Captures {
             None => "",
             Some(i) => self.at(*i),
         }
+    }
+
+    /// Returns the start and end positions of the Nth capture group.
+    /// Returns `(0, 0)` if `i` is not a valid capture group.
+    /// The positions returned are *always* byte indices with respect to the 
+    /// original string matched.
+    pub fn pos(&self, i: uint) -> (uint, uint) {
+        if i >= self.locs.len() {
+            return (0u, 0u)
+        }
+        let (s, e) = *self.locs.get(i);
+        (s + self.offset, e + self.offset)
     }
 
     /// Creates an iterator of all the capture groups in order of appearance
@@ -277,19 +391,37 @@ impl<'r> Iterator<&'r str> for SubCaptures<'r> {
     }
 }
 
+/// An iterator that yields all non-overlapping capture groups matching a
+/// particular regular expression.
 pub struct FindCaptures<'r> {
     re: &'r Regexp,
     text: ~str,
+    last_match: uint,
     last_end: uint,
 }
 
 impl<'r> Iterator<Captures> for FindCaptures<'r> {
     fn next(&mut self) -> Option<Captures> {
-        let t = self.text.slice(self.last_end, self.text.len());
-        match self.re.captures(t) {
+        if self.last_end > self.text.len() {
+            return None
+        }
+        let caps = {
+            let t = self.text.slice(self.last_end, self.text.len());
+            self.re.captures(t)
+        };
+        match caps {
             None => None,
-            Some(caps) => {
-                self.last_end += caps.at(0).len();
+            Some(mut caps) => {
+                caps.adjust_locations(self.last_end);
+
+                // Don't accept empty matches immediately following a match.
+                // i.e., no infinite loops please.
+                if caps.at(0).len() == 0 && self.last_end == self.last_match {
+                    self.last_end += 1;
+                    return self.next()
+                }
+                self.last_end += caps.max_match.len();
+                self.last_match = self.last_end;
                 Some(caps)
             }
         }
@@ -297,6 +429,7 @@ impl<'r> Iterator<Captures> for FindCaptures<'r> {
 }
 
 /// An iterator over all non-overlapping matches for a particular string.
+///
 /// The iterator yields a tuple of integers corresponding to the start and end
 /// of the match. The indices are byte offsets.
 pub struct FindMatches<'r> {
