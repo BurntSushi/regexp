@@ -5,11 +5,21 @@ use super::compile::{Inst, Char, CharClass, Any,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
-pub fn run(insts: &[Inst], input: &str) -> Option<Vec<uint>> {
+pub type CaptureIndices = Vec<(uint, uint)>;
+
+pub fn run(insts: &[Inst], input: &str) -> Option<CaptureIndices> {
     Vm {
         insts: insts,
         input: input.chars().collect(),
-    }.run()
+    }.run().map(unflatten_capture_locations)
+}
+
+fn unflatten_capture_locations(locs: Vec<uint>) -> Vec<(uint, uint)> {
+    let mut caps = Vec::with_capacity(locs.len() / 2);
+    for win in locs.as_slice().chunks(2) {
+        caps.push((win[0], win[1]))
+    }
+    caps
 }
 
 fn numcaps(insts: &[Inst]) -> uint {
@@ -23,7 +33,6 @@ fn numcaps(insts: &[Inst]) -> uint {
     n
 }
 
-#[deriving(Show)]
 struct Thread {
     pc: uint,
     groups: Vec<uint>,
@@ -42,7 +51,6 @@ impl Thread {
     }
 }
 
-#[deriving(Show)]
 struct Threads {
     queue: Vec<Thread>,
     sparse: Vec<uint>,

@@ -16,6 +16,9 @@ extern crate log;
 
 use std::fmt;
 
+pub use regexp::{Regexp, Captures, SubCaptures, FindCaptures, FindMatches};
+pub use regexp::{RegexpSplits, RegexpSplitsN};
+
 mod compile;
 mod parse;
 mod regexp;
@@ -76,10 +79,13 @@ mod test {
         for (s, e) in r.find_iter(text) {
             debug!("Matched: {} ({})", (s, e), text.slice(s, e));
         }
-        let gs = r.captures(text).unwrap();
-        let all: Vec<&str> = gs.subs().collect();
-        debug!("All: {}, First: {}, Second: {}", all, gs.at(0), gs.at(1));
-        debug!("Named: {}", gs.name("sec"));
+        for cap in r.captures_iter(text) {
+            debug!("Captures: {}", cap.iter().collect::<Vec<&str>>());
+        }
+        // let gs = r.captures(text).unwrap(); 
+        // let all: Vec<&str> = gs.iter().collect(); 
+        // debug!("All: {}, First: {}, Second: {}", all, gs.at(0), gs.at(1)); 
+        // debug!("Named: {}", gs.name("sec")); 
 
     }
 
@@ -109,8 +115,18 @@ mod test {
 
         // run(r"dre", "andrew dr. dre yo"); 
 
-        let roman = ~"ⅡⅢⅳⅥ";
-        run(r"\pN(?P<sec>\pN)", roman);
+        // let roman = ~"ⅡⅢⅳⅥ"; 
+        // run(r"\pN(?P<sec>\pN)", roman); 
+        // run(r"\pN+", roman); 
+
+        let text = "abaabaccadaaae";
+        let re = Regexp::new("a*").unwrap();
+        // for (s, e) in re.find_iter(text) { 
+            // debug!("Find: ({}, {})", s, e); 
+        // } 
+        for s in re.splitn(text, 2) {
+            debug!("Split: {}", s);
+        }
     }
 
     #[test]
