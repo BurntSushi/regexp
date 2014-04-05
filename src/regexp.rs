@@ -18,11 +18,11 @@ pub struct Regexp {
 impl Regexp {
     /// Creates a new compiled regular expression. Once compiled, it can be
     /// used repeatedly to search, split or replace text in a string.
-    pub fn new(s: &str) -> Result<Regexp, Error> {
-        let ast = try!(parse(s));
+    pub fn new(regex: &str) -> Result<Regexp, Error> {
+        let ast = try!(parse(regex));
         let (insts, cap_names) = compile(ast);
         Ok(Regexp {
-            orig: s.to_owned(),
+            orig: regex.to_owned(),
             prog: insts,
             names: cap_names,
         })
@@ -30,28 +30,28 @@ impl Regexp {
 
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
-    fn run(&self, s: &str) -> Option<CaptureIndices> {
-        run(self.prog.as_slice(), s).map(|ulocs| to_byte_indices(s, ulocs))
-        // vm::run(self.prog.as_slice(), s) 
+    fn run(&self, text: &str) -> Option<CaptureIndices> {
+        let locs = run(self.prog.as_slice(), text);
+        locs.map(|ulocs| to_byte_indices(text, ulocs))
     }
 
     /// Returns true if and only if the regexp matches the string given.
-    pub fn is_match(&self, s: &str) -> bool {
-        self.run(s).is_some()
+    pub fn is_match(&self, text: &str) -> bool {
+        self.run(text).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-longest match in 
-    /// `s`. If no match exists, then `None` is returned.
-    pub fn find(&self, s: &str) -> Option<(uint, uint)> {
-        self.run(s).map(|locs| *locs.get(0))
+    /// `text`. If no match exists, then `None` is returned.
+    pub fn find(&self, text: &str) -> Option<(uint, uint)> {
+        self.run(text).map(|locs| *locs.get(0))
     }
 
-    /// Iterates through each successive non-overlapping match in `s`, 
-    /// returning the start and end byte indices with respect to `s`.
-    pub fn find_iter<'r>(&'r self, s: &str) -> FindMatches<'r> {
+    /// Iterates through each successive non-overlapping match in `text`,
+    /// returning the start and end byte indices with respect to `text`.
+    pub fn find_iter<'r>(&'r self, text: &str) -> FindMatches<'r> {
         FindMatches {
             re: self,
-            text: s.to_owned(),
+            text: text.to_owned(),
             last_end: 0,
             last_match: 0,
         }
