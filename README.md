@@ -7,7 +7,7 @@ No benchmarks yet. It's likely pretty slow.
 
 More importantly, no tests yet.
 
-There's no public API yet. See tests in `src/lib.rs` if you want to try it out.
+Public API is in progress: http://burntsushi.net/rustdoc/regexp/
 
 Much of this library (from parsing all the way to the VM itself) is using ideas 
 from Russ Cox in his
