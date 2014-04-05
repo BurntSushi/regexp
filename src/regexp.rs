@@ -129,12 +129,29 @@ impl Regexp {
         new
     }
 
-    /// Replaces all non-overlapping matches in `text` with the replacement
-    /// provided.
+    /// Replaces all non-overlapping matches in `text` with the 
+    /// replacement provided. This is the same as calling `replacen` with
+    /// `limit` set to `0`.
     pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+        self.replacen(text, 0, rep)
+    }
+
+    /// Replaces at most `limit` non-overlapping matches in `text` with the 
+    /// replacement provided. If `limit` is 0, then all non-overlapping matches
+    /// are replaced.
+    pub fn replacen<R: Replacer>
+                   (&self, text: &str, limit: uint, rep: R) -> ~str {
         let mut new = str::with_capacity(text.len());
         let mut last_match = 0u;
+        let mut i = 0;
         for cap in self.captures_iter(text) {
+            // It'd be nicer to use the 'take' iterator instead, but it seemed
+            // awkward given that '0' => no limit.
+            if limit > 0 && i >= limit {
+                break
+            }
+            i += 1;
+
             let (s, e) = cap.pos(0);
             new.push_str(text.slice(last_match, s));
             new.push_str(rep.replace(&cap));
