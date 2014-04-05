@@ -64,6 +64,14 @@ pub fn quote(s: &str) -> ~str {
     quoted
 }
 
+/// Tests if the given regular expression matches somewhere in the text given.
+///
+/// If there was a problem compiling the regular expression, an error is
+/// returned.
+pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
+    Regexp::new(regex).map(|r| r.is_match(text))
+}
+
 #[cfg(test)]
 mod test {
     use super::compile;
@@ -73,9 +81,9 @@ mod test {
 
     #[test]
     fn other() {
-        let r = Regexp::new(r"(\S+)\s+(?P<last>\S+)").unwrap();
-        let text = "andrew gallant";
-        debug!("Replaced: {}", r.replace_all(text, "$last,$wat $1"));
+        let r = Regexp::new(r"(\S+)\s+(?P<last>\S+)\s*").unwrap();
+        let text = "andrew gallant    kaitlyn brady";
+        debug!("Replaced: {}", r.replace_all(text, "$last,$wat $1 "));
 
         // let r = Regexp::new("a+").unwrap(); 
         // let text = "aaaawhoa"; 
