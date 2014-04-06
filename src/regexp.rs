@@ -31,8 +31,7 @@ impl Regexp {
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
     fn run(&self, text: &str) -> Option<CaptureIndices> {
-        let locs = run(self.prog.as_slice(), text);
-        locs.map(|ulocs| to_byte_indices(text, ulocs))
+        run(self.prog.as_slice(), text)
     }
 
     /// Returns true if and only if the regexp matches the string given.
@@ -480,43 +479,4 @@ impl<'r> Iterator<(uint, uint)> for FindMatches<'r> {
             }
         }
     }
-}
-
-fn to_byte_indices(s: &str, ulocs: CaptureIndices) -> CaptureIndices {
-    // FIXME: This seems incredibly slow and unfortunate and I think it can
-    // be removed completely.
-    // I wonder if there is a way to get the VM to return byte indices easily.
-    // Preferably if it can be done without disrupting the fact that everything
-    // works at the Unicode `char` granularity.
-    // (Maybe keep track of byte index as we move through string?)
-
-    let mut blocs = Vec::from_elem(ulocs.len(), (0u, 0u));
-    let biggest = ulocs.get(0).val1(); // first capture is always biggest
-    for (s_uloc, (bloc, _)) in s.char_indices().enumerate() {
-        if s_uloc > biggest {
-            // We can stop processing the string once we know we're done
-            // mapping to byte indices.
-            break
-        }
-        for (loci, &(suloc, euloc)) in ulocs.iter().enumerate() {
-            if suloc == s_uloc {
-                *blocs.get_mut(loci).mut0() = bloc;
-            }
-            if euloc == s_uloc {
-                *blocs.get_mut(loci).mut1() = bloc;
-            }
-        }
-    }
-    // We also need to make sure that ending positions that correspond to
-    // the character length of 's' are mapped to the byte length.
-    let char_len = s.char_len();
-    for (loci, &(suloc, euloc)) in ulocs.iter().enumerate() {
-        if suloc == char_len {
-            *blocs.get_mut(loci).mut0() = s.len();
-        }
-        if euloc == char_len {
-            *blocs.get_mut(loci).mut1() = s.len();
-        }
-    }
-    blocs
 }

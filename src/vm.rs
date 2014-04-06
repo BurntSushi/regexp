@@ -11,7 +11,18 @@ pub fn run(insts: &[Inst], input: &str) -> Option<CaptureIndices> {
     Vm {
         insts: insts,
         input: input.chars().collect(),
+        byte_inds: char_to_byte_indices(input),
     }.run().map(unflatten_capture_locations)
+}
+
+fn char_to_byte_indices(input: &str) -> Vec<uint> {
+    let mut inds = Vec::with_capacity(input.len());
+    for (bytei, _) in input.char_indices() {
+        inds.push(bytei)
+    }
+    // Push one more for the length.
+    inds.push(input.len());
+    inds
 }
 
 fn unflatten_capture_locations(locs: Vec<uint>) -> Vec<(uint, uint)> {
@@ -20,17 +31,6 @@ fn unflatten_capture_locations(locs: Vec<uint>) -> Vec<(uint, uint)> {
         caps.push((win[0], win[1]))
     }
     caps
-}
-
-fn numcaps(insts: &[Inst]) -> uint {
-    let mut n = 0;
-    for inst in insts.iter() {
-        match *inst {
-            Save(c) => n = cmp::max(n, c+1),
-            _ => {}
-        }
-    }
-    n
 }
 
 struct Thread {
@@ -107,29 +107,7 @@ impl Threads {
 struct Vm<'r> {
     insts: &'r [Inst],
     input: Vec<char>,
-}
-
-fn class_cmp(casei: bool, mut textc: char,
-             (mut start, mut end): (char, char)) -> Ordering {
-    if casei {
-        // FIXME: This is pretty ridiculous. All of this case conversion
-        // can be moved outside this function:
-        // 1) textc should be uppercased outside the bsearch.
-        // 2) the character class itself should be uppercased either in the
-        //    parser or the compiler.
-        // FIXME: This is too simplistic for correct Unicode support.
-        //        See also: char_eq
-        textc = textc.to_uppercase();
-        start = start.to_uppercase();
-        end = end.to_uppercase();
-    }
-    if textc >= start && textc <= end {
-        Equal
-    } else if start > textc {
-        Greater
-    } else {
-        Less
-    }
+    byte_inds: Vec<uint>, // maps char index to byte index
 }
 
 impl<'r> Vm<'r> {
@@ -222,16 +200,13 @@ impl<'r> Vm<'r> {
             }
             EmptyWordBoundary(yes) => {
                 let wb = self.is_word_boundary(ic);
-                debug!("WORD BOUNDARY: ic:{}, wb:{}", ic, wb);
                 if yes == wb {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
             Save(slot) => {
-                // clist.save(i, slot, ic); 
-                // let groups = clist.groups(i); 
                 let old = groups[slot];
-                groups[slot] = ic;
+                groups[slot] = *self.byte_inds.get(ic);
                 self.add(nlist, pc + 1, ic, groups);
                 groups[slot] = old;
             }
@@ -289,4 +264,38 @@ impl<'r> Vm<'r> {
     fn get(&self, ic: uint) -> char {
         *self.input.get(ic)
     }
+}
+
+fn class_cmp(casei: bool, mut textc: char,
+             (mut start, mut end): (char, char)) -> Ordering {
+    if casei {
+        // FIXME: This is pretty ridiculous. All of this case conversion
+        // can be moved outside this function:
+        // 1) textc should be uppercased outside the bsearch.
+        // 2) the character class itself should be uppercased either in the
+        //    parser or the compiler.
+        // FIXME: This is too simplistic for correct Unicode support.
+        //        See also: char_eq
+        textc = textc.to_uppercase();
+        start = start.to_uppercase();
+        end = end.to_uppercase();
+    }
+    if textc >= start && textc <= end {
+        Equal
+    } else if start > textc {
+        Greater
+    } else {
+        Less
+    }
+}
+
+fn numcaps(insts: &[Inst]) -> uint {
+    let mut n = 0;
+    for inst in insts.iter() {
+        match *inst {
+            Save(c) => n = cmp::max(n, c+1),
+            _ => {}
+        }
+    }
+    n
 }

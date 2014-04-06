@@ -145,18 +145,18 @@ macro_rules! mat(
 
 mat!(match_1, "abc", "abcabc", (0, 3))
 
-// fn print_matches(re: &str, text: &str) { 
-    // let r = Regexp::new(re).unwrap(); 
-    // let caps = r.captures(text).unwrap(); 
-    // for (i, s) in caps.iter().enumerate() { 
-        // debug!("{} :: '{}'", caps.pos(i), s); 
-    // } 
-    // debug!("--------------------------"); 
-// } 
-//  
-// #[test] 
-// fn wat() { 
-    // debug!(""); 
+fn print_matches(re: &str, text: &str) {
+    let r = Regexp::new(re).unwrap();
+    let caps = r.captures(text).unwrap();
+    for (i, s) in caps.iter().enumerate() {
+        debug!("{} :: '{}'", caps.pos(i), s);
+    }
+    debug!("--------------------------");
+}
+
+#[test]
+fn wat() {
+    debug!("");
     // print_matches("(a?)((ab)?)(b?)", "ab"); 
     // print_matches("((a?)((ab)?))(b?)", "ab"); 
     // print_matches(r"(^|[ (,;])((([Ff]eb[^ ]* *|0*2/|\* */?)0*[6-7]))([^0-9]|$)", 
@@ -166,5 +166,6 @@ mat!(match_1, "abc", "abcabc", (0, 3))
     // print_matches("(a+|b)*", "ab"); 
     // print_matches("(aba|a*b)*", "ababa"); 
     // print_matches("(a(b)?)+", "aba"); 
-// } 
+    print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ");
+}
 
