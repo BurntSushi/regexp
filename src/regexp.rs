@@ -384,8 +384,9 @@ impl<'r> Iterator<&'r str> for SubCaptures<'r> {
 }
 
 /// An iterator over capture group positions for a particular match of a 
-/// regular expression. Positions are byte indices in terms of the original
-/// string matched.
+/// regular expression.
+///
+/// Positions are byte indices in terms of the original string matched.
 pub struct SubCapturesPos<'r> {
     idx: uint,
     caps: &'r Captures,

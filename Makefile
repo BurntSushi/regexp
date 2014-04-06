@@ -14,8 +14,8 @@ ctags:
 
 docs:
 	rm -rf doc
-	rustdoc --test src/lib.rs
-	rustdoc src/lib.rs
+	rustdoc -L $(RUST_PATH) --test src/lib.rs
+	rustdoc -L $(RUST_PATH) src/lib.rs
 	# WTF is rustdoc doing?
 	chmod 755 doc
 	in-dir doc fix-perms
