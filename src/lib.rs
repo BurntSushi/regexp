@@ -56,11 +56,11 @@ impl fmt::Show for Error {
     }
 }
 
-/// Escapes all regular expression meta characters in `s` so that it may be
+/// Escapes all regular expression meta characters in `text` so that it may be
 /// safely used in a regular expression as a literal string.
-pub fn quote(s: &str) -> ~str {
-    let mut quoted = str::with_capacity(s.len());
-    for c in s.chars() {
+pub fn quote(text: &str) -> ~str {
+    let mut quoted = str::with_capacity(text.len());
+    for c in text.chars() {
         if is_punct(c) {
             quoted.push_char('\\')
         }
