@@ -350,6 +350,13 @@ impl Captures {
     pub fn iter<'r>(&'r self) -> SubCaptures<'r> {
         SubCaptures { idx: 0, caps: self, }
     }
+
+    /// Creates an iterator of all the capture group positions in order of 
+    /// appearance in the regular expression. Positions are byte indices
+    /// in terms of the original string matched.
+    pub fn iter_pos<'r>(&'r self) -> SubCapturesPos<'r> {
+        SubCapturesPos { idx: 0, caps: self, }
+    }
 }
 
 impl Container for Captures {
@@ -370,6 +377,25 @@ impl<'r> Iterator<&'r str> for SubCaptures<'r> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.at(self.idx - 1))
+        } else {
+            None
+        }
+    }
+}
+
+/// An iterator over capture group positions for a particular match of a 
+/// regular expression. Positions are byte indices in terms of the original
+/// string matched.
+pub struct SubCapturesPos<'r> {
+    idx: uint,
+    caps: &'r Captures,
+}
+
+impl<'r> Iterator<(uint, uint)> for SubCapturesPos<'r> {
+    fn next(&mut self) -> Option<(uint, uint)> {
+        if self.idx < self.caps.len() {
+            self.idx += 1;
+            Some(self.caps.pos(self.idx - 1))
         } else {
             None
         }

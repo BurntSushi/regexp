@@ -8,23 +8,28 @@
 
 //! Regular expressions for Rust.
 
+#![feature(macro_rules)]
 #![feature(phase)]
 
 extern crate collections;
 #[phase(syntax, link)]
 extern crate log;
+extern crate quickcheck;
+extern crate rand;
 
 use std::fmt;
 use std::str;
 use parse::is_punct;
 
-pub use regexp::{Regexp, Captures, SubCaptures, FindCaptures, FindMatches};
+pub use regexp::{Regexp, Captures, SubCaptures, SubCapturesPos};
+pub use regexp::{FindCaptures, FindMatches};
 pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
 
 mod compile;
 mod parse;
 mod regexp;
 mod vm;
+mod test;
 
 /// Error corresponds to something that can go wrong while parsing or compiling
 /// a regular expression.
@@ -73,13 +78,14 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 }
 
 #[cfg(test)]
-mod test {
+mod testold {
     use super::compile;
     use super::parse;
     use super::regexp::{Regexp, NoExpand};
     use super::vm;
 
     #[test]
+    #[ignore]
     fn other() {
         let r = Regexp::new(r"(\S+)\s+(?P<last>\S+)\s*").unwrap();
         let text = "andrew gallant    kaitlyn brady";
@@ -90,27 +96,6 @@ mod test {
         // for m in r.captures_iter(text) { 
             // debug!("Match: {} (pos: {})", m.at(0), m.pos(0)); 
         // } 
-    }
-
-    fn run_manual(regexp: &str, text: &str) {
-        debug!("\n--------------------------------");
-        debug!("RE: {}", regexp);
-        debug!("Text: {}", text);
-
-        let re = match parse::parse(regexp) {
-            Err(err) => fail!("{}", err),
-            Ok(re) => re,
-        };
-        debug!("AST: {}", re);
-
-        let (insts, cap_names) = compile::compile(re);
-        debug!("Insts: {}", insts);
-        debug!("Capture names: {}", cap_names);
-
-        let matched = vm::run(insts.as_slice(), text);
-        debug!("Matched: {}", matched);
-
-        debug!("--------------------------------");
     }
 
     fn run(re: &str, text: &str) {

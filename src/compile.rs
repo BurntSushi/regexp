@@ -5,7 +5,6 @@ use super::parse::{ZeroOne, ZeroMore, OneMore, Greedy, Ungreedy};
 
 type InstIdx = uint;
 
-#[deriving(Show)]
 pub enum Inst {
     // When a Match instruction is executed, the current thread is successful.
     Match,
@@ -100,7 +99,11 @@ impl Compiler {
                 self.compile(x);
                 self.push(Save(2 * cap + 1));
             }
-            ~Cat(x, y) => { self.compile(x); self.compile(y); }
+            ~Cat(xs) => {
+                for x in xs.move_iter() {
+                    self.compile(x)
+                }
+            }
             ~Alt(x, y) => {
                 let split = self.empty_split(); // push: split 0, 0
                 let j1 = self.insts.len();
@@ -187,20 +190,5 @@ impl Compiler {
         } else {
             self.set_split(split, j3, j2);
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::super::parse;
-
-    #[test]
-    #[ignore]
-    fn simple() {
-        let re = match parse::parse("and") {
-            Err(err) => fail!("Parse error: {}", err),
-            Ok(re) => re,
-        };
-        debug!("{}", super::compile(re));
     }
 }

@@ -23,7 +23,9 @@ pub enum Ast {
     End(bool),
     WordBoundary(bool),
     Capture(uint, Option<~str>, ~Ast),
-    Cat(~Ast, ~Ast),
+    // Represent concatenation as a flat vector to avoid blowing the
+    // stack in the compiler.
+    Cat(Vec<~Ast>),
     Alt(~Ast, ~Ast),
     Rep(~Ast, Repeater, Greed),
 }
@@ -298,6 +300,8 @@ impl<'a> Parser<'a> {
     }
 
     fn next_char(&mut self) {
+        // FIXME: We need a better story about trying to retrieve a character
+        // that's necessary after the input has been exhausted.
         self.chari += 1;
     }
 
@@ -329,6 +333,12 @@ impl<'a> Parser<'a> {
             _ => {},
         }
         let ast = try!(self.pop_ast());
+        match ast {
+            ~Begin(_) | ~End(_) | ~WordBoundary(_) =>
+                return self.synerr(
+                    "Repeat arguments cannot be empty width assertions."),
+            _ => {}
+        }
         let greed = self.get_next_greedy();
         self.push(~Rep(ast, rep, greed));
         Ok(())
@@ -423,6 +433,10 @@ impl<'a> Parser<'a> {
                 c => {
                     if self.peek_is(1, '-') && !self.peek_is(2, ']') {
                         self.next_char(); self.next_char();
+                        if self.chari >= self.chars.len() {
+                            return self.synerr(
+                                "Expected a closing ']' for a character class.")
+                        }
                         let c2 = self.cur();
                         if c2 < c {
                             return self.synerr(format!(
@@ -567,6 +581,10 @@ impl<'a> Parser<'a> {
     // Assumes that '\' has already been consumed.
     fn parse_escape(&mut self) -> Result<~Ast, Error> {
         self.next_char();
+        if self.chari >= self.chars.len() {
+            return self.synerr("Incomplete escape sequence.")
+        }
+
         let c = self.cur();
         if is_punct(c) {
             return Ok(~Literal(c, false))
@@ -803,7 +821,7 @@ impl<'a> Parser<'a> {
     }
 
     fn concat(&mut self, from: uint) -> Result<(), Error> {
-        let ast = try!(self.build_from(from, Cat));
+        let ast = try!(self.build_from(from, concat_flatten));
         self.push(ast);
         Ok(())
     }
@@ -898,6 +916,15 @@ pub fn is_punct(c: char) -> bool {
         '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
         '[' | ']' | '{' | '}' | '^' | '$' => true,
         _ => false,
+    }
+}
+
+fn concat_flatten(x: ~Ast, y: ~Ast) -> Ast {
+    match (x, y) {
+        (~Cat(mut xs), ~Cat(ys)) => { xs.push_all_move(ys); Cat(xs) }
+        (~Cat(mut xs), ast) => { xs.push(ast); Cat(xs) }
+        (ast, ~Cat(mut xs)) => { xs.unshift(ast); Cat(xs) }
+        (ast1, ast2) => Cat(vec!(ast1, ast2)),
     }
 }
 
