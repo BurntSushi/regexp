@@ -162,7 +162,9 @@ impl Regexp {
     }
 }
 
-/// NoExpand can be used with `replace` and `replace_all` to do a literal
+/// NoExpand indicates literal string replacement.
+///
+/// It can be used with `replace` and `replace_all` to do a literal
 /// string replacement without expanding `$name` to their corresponding
 /// capture groups.
 pub struct NoExpand<'r>(pub &'r str);
