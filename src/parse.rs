@@ -374,13 +374,13 @@ impl<'a> Parser<'a> {
         let mut ranges: Vec<(char, char)> = vec!();
         let mut alts: Vec<~Ast> = vec!();
 
-        while self.peek_is(1, '-') {
-            self.next_char();
-            ranges.push(('-', '-'))
-        }
         if self.peek_is(1, ']') {
             self.next_char();
             ranges.push((']', ']'))
+        }
+        while self.peek_is(1, '-') {
+            self.next_char();
+            ranges.push(('-', '-'))
         }
         self.next_char();
         while self.chari < self.chars.len() {
@@ -418,15 +418,21 @@ impl<'a> Parser<'a> {
             }
             match c {
                 ']' => {
-                    let mut ast = ~Nothing;
                     if ranges.len() > 0 {
                         let casei = self.flags.is_set(CaseI);
-                        ast = ~Class(combine_ranges(ranges), negated, casei);
+                        let mut ast = ~Class(combine_ranges(ranges),
+                                             negated, casei);
+                        for alt in alts.move_iter() {
+                            ast = ~Alt(alt, ast)
+                        }
+                        self.push(ast);
+                    } else if alts.len() > 0 {
+                        let mut ast = alts.pop().unwrap();
+                        for alt in alts.move_iter() {
+                            ast = ~Alt(alt, ast)
+                        }
+                        self.push(ast);
                     }
-                    for alt in alts.move_iter() {
-                        ast = ~Alt(alt, ast)
-                    }
-                    self.push(ast);
                     return Ok(())
                 }
                 c => {
@@ -547,7 +553,7 @@ impl<'a> Parser<'a> {
         }
 
         // Now manipulate the AST be repeating elements.
-        if min > 0 && max.is_none() {
+        if max.is_none() {
             // Require N copies of what's on the stack and then repeat it.
             let ast = try!(self.pop_ast());
             for _ in iter::range(0, min) {

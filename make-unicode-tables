@@ -39,7 +39,7 @@ def is_valid_unicode(n):
 
 
 def read_cats(f):
-    assigned = defaultdict(list);
+    assigned = defaultdict(list)
     for row in csv.reader(f, delimiter=';'):
         (hex, cats) = (int(row[0], 16), expand_cat(row[2]))
         if not is_valid_unicode(hex):
@@ -50,9 +50,9 @@ def read_cats(f):
 
 
 def read_scripts(f):
-    assigned = defaultdict(list);
+    assigned = defaultdict(list)
     for line in f:
-        line = line.strip();
+        line = line.strip()
         if not line or line.startswith('#'):
             continue
         hexes, name = map(str.strip, line.split(';'))[:2]
@@ -130,5 +130,3 @@ pub static UNICODE_CLASSES: Class = &[
 ];
 '''
     print(tpl.format(groups=unigroups))
-    
-

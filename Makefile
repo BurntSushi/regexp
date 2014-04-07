@@ -6,7 +6,8 @@ RUSTFLAGS ?= --opt-level=3
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
 SRC_FILES = src/lib.rs src/parse.rs src/compile.rs src/vm.rs \
 						src/unicode.rs src/regexp.rs \
-						src/test/mod.rs src/test/test.rs src/test/quick.rs
+						src/test/mod.rs src/test/test.rs src/test/quick.rs \
+						src/test/matches.rs
 
 compile:
 	$(RUSTC) $(RUSTFLAGS) ./src/lib.rs --out-dir=./build
@@ -45,6 +46,12 @@ quicktest: build/quicktests
 
 build/quicktests: $(SRC_FILES)
 	rustc $(RUSTTESTFLAGS) --test --cfg quickcheck src/lib.rs -o ./build/quicktests
+
+debug: build/debug
+	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/debug
+
+build/debug: $(SRC_FILES)
+	rustc $(RUSTTESTFLAGS) --test --cfg debug src/lib.rs -o ./build/debug
 
 bench: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench

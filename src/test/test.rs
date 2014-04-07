@@ -35,55 +35,32 @@ fail_parse!(fail_parse_counted_big_min, "a{1001,}")
 fail_parse!(fail_parse_counted_no_close, "a{1001")
 
 macro_rules! mat(
-    ($name:ident, $re:expr, $text:expr) => ( mat!($name, $re, $text,) );
-    ($name:ident, $re:expr, $text:expr, $($loc:expr),+) => (
+    ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
         #[test]
         fn $name() {
             let re = $re;
             let text = $text;
-            let locs: Vec<Option<(uint, uint)>> = vec!($($loc)+);
+            let expected: Vec<Option<(uint, uint)>> = vec!($($loc)+);
             let r = match Regexp::new(re) {
                 Ok(r) => r,
                 Err(err) => fail!("Could not compile '{}': {}", re, err),
             };
-            let test_locs = match r.captures(text) {
+            let got = match r.captures(text) {
                 Some(c) => c.iter_pos().collect::<Vec<Option<(uint, uint)>>>(),
-                None => vec!(),
+                None => vec!(None),
             };
-            if locs != test_locs {
+            // The test set sometimes leave out capture groups, so truncate
+            // actual capture groups to match test set.
+            let (sexpect, mut sgot) = (expected.as_slice(), got.as_slice());
+            if sgot.len() > sexpect.len() {
+                sgot = sgot.slice(0, sexpect.len())
+            }
+            if sexpect != sgot {
                 fail!("For RE '{}' against '{}', expected '{}' but got '{}'",
-                      re, text, locs, test_locs);
+                      re, text, sexpect, sgot);
             }
         }
     );
 )
 
-// mat!(match_1, "abc", "abcabc", Some((0, 3))) 
-// mat!(match_2, "(a*)*", "-", Some((0, 0)), None) 
-
-fn print_matches(re: &str, text: &str) {
-    let r = Regexp::new(re).unwrap();
-    let caps = r.captures(text).unwrap();
-    for (i, s) in caps.iter().enumerate() {
-        debug!("{} :: '{}'", caps.pos(i), s);
-    }
-    debug!("--------------------------");
-}
-
-#[test]
-fn wat() {
-    debug!("");
-    // print_matches("(a?)((ab)?)(b?)", "ab"); 
-    // print_matches("((a?)((ab)?))(b?)", "ab"); 
-    // print_matches(r"(^|[ (,;])((([Ff]eb[^ ]* *|0*2/|\* */?)0*[6-7]))([^0-9]|$)", 
-                  // "feb 1,Feb 6"); 
-    // print_matches("(a*)*", "-"); 
-    // print_matches("(a*|b)*", "-"); 
-    // print_matches("(a+|b)*", "ab"); 
-    // print_matches("(aba|a*b)*", "ababa"); 
-    // print_matches("(a(b)?)+", "aba"); 
-    print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ");
-    // print_matches("(aa)|(bb)", "bb"); 
-    // print_matches("(>[^\n]+)?\n", ">name\nactg\n>name2\ngtca"); 
-}
-
+mod matches;
