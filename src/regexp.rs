@@ -495,6 +495,8 @@ struct SearchText<'r> {
     bytei: Vec<uint>,
 }
 
+// TODO: Choose better names. There's some complicated footwork going on here
+// to handle character and byte indices.
 impl<'r> SearchText<'r> {
     fn from_str(input: &'r str) -> SearchText<'r> {
         let chars = input.chars().collect();
