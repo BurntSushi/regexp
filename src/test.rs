@@ -126,13 +126,13 @@ macro_rules! mat(
         fn $name() {
             let re = $re;
             let text = $text;
-            let locs = vec!($($loc)+);
+            let locs: Vec<Option<(uint, uint)>> = vec!($($loc)+);
             let r = match Regexp::new(re) {
                 Ok(r) => r,
                 Err(err) => fail!("Could not compile '{}': {}", re, err),
             };
             let test_locs = match r.captures(text) {
-                Some(c) => c.iter_pos().collect::<Vec<(uint, uint)>>(),
+                Some(c) => c.iter_pos().collect::<Vec<Option<(uint, uint)>>>(),
                 None => vec!(),
             };
             if locs != test_locs {
@@ -143,7 +143,8 @@ macro_rules! mat(
     );
 )
 
-mat!(match_1, "abc", "abcabc", (0, 3))
+// mat!(match_1, "abc", "abcabc", Some((0, 3))) 
+// mat!(match_2, "(a*)*", "-", Some((0, 0)), None) 
 
 fn print_matches(re: &str, text: &str) {
     let r = Regexp::new(re).unwrap();
@@ -166,6 +167,8 @@ fn wat() {
     // print_matches("(a+|b)*", "ab"); 
     // print_matches("(aba|a*b)*", "ababa"); 
     // print_matches("(a(b)?)+", "aba"); 
-    print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ");
+    // print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ"); 
+    // print_matches("(aa)|(bb)", "bb"); 
+    print_matches("(>[^\n]+)?\n", ">name\nactg\n>name2\ngtca");
 }
 

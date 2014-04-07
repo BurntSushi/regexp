@@ -30,19 +30,23 @@ impl Regexp {
 
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
-    fn run(&self, text: &str) -> Option<CaptureIndices> {
+    fn run(&self, text: &str) -> CaptureIndices {
         run(self.prog.as_slice(), text)
     }
 
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
-        self.run(text).is_some()
+        self.has_match(self.run(text))
+    }
+
+    fn has_match(&self, caps: CaptureIndices) -> bool {
+        caps.len() > 0 && caps.get(0).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-longest match in 
     /// `text`. If no match exists, then `None` is returned.
     pub fn find(&self, text: &str) -> Option<(uint, uint)> {
-        self.run(text).map(|locs| *locs.get(0))
+        *self.run(text).get(0)
     }
 
     /// Iterates through each successive non-overlapping match in `text`,
@@ -59,24 +63,23 @@ impl Regexp {
     /// Returns the capture groups corresponding to the leftmost-longest
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
-    pub fn captures(&self, text: &str) -> Option<Captures> {
-        let locs =
-            match self.run(text) {
-                None => return None,
-                Some(locs) => locs,
-            };
-        let &(_, e) = locs.get(0);
-        let max_match = text.slice(0, e).to_owned();
+    pub fn captures<'r>(&self, text: &'r str) -> Option<Captures<'r>> {
+        let locs = self.run(text);
+        let end = match *locs.get(0) {
+            None => return None,
+            Some((_, e)) => e,
+        };
+        let max_match = text.slice(0, end);
         Some(Captures::from_locs(max_match, self.names.as_slice(), locs))
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter` (except it
     /// yields capture groups and not positions).
-    pub fn captures_iter<'r>(&'r self, text: &str) -> FindCaptures<'r> {
+    pub fn captures_iter<'r>(&'r self, text: &'r str) -> FindCaptures<'r> {
         FindCaptures {
             re: self,
-            text: text.to_owned(),
+            text: text,
             last_match: 0,
             last_end: 0,
         }
@@ -120,8 +123,11 @@ impl Regexp {
                 None => return ~"",
                 Some(caps) => caps,
             };
+        let (s, e) = match caps.pos(0) {
+            None => return text.to_owned(), // hmm, switch to MaybeOwned?
+            Some((s, e)) => (s, e),
+        };
         let mut new = str::with_capacity(text.len());
-        let (s, e) = caps.pos(0);
         new.push_str(text.slice(0, s));
         new.push_str(rep.replace(&caps));
         new.push_str(text.slice(e, text.len()));
@@ -151,11 +157,12 @@ impl Regexp {
             }
             i += 1;
 
-            let (s, e) = cap.pos(0);
+            let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
             new.push_str(text.slice(last_match, s));
             new.push_str(rep.replace(&cap));
             last_match = e;
         }
+        println!("REPLACED: {}", i);
         new.push_str(text.slice(last_match, text.len()));
         new
     }
@@ -279,18 +286,18 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 /// If a capture group is named, then the matched string is *also* available
 /// via the `name` method. (Note that the 0th capture is always unnamed and so
 /// must be accessed with the `at` method.)
-pub struct Captures {
-    max_match: ~str,
+pub struct Captures<'r> {
+    max_match: &'r str,
     locs: CaptureIndices,
     named: HashMap<~str, uint>,
     offset: uint,
 }
 
-impl Captures {
+impl<'r> Captures<'r> {
     /// Creates a new group of captures from the matched string, a list of
     /// capture names and a list of locations.
-    fn from_locs(s: ~str, names: &[Option<~str>],
-                 locs: CaptureIndices) -> Captures {
+    fn from_locs(s: &'r str, names: &[Option<~str>],
+                 locs: CaptureIndices) -> Captures<'r> {
         let mut named = HashMap::new();
         for (i, name) in names.iter().enumerate() {
             match name {
@@ -316,18 +323,22 @@ impl Captures {
 
     /// Returns the matched string for the capture group `i`.
     /// If `i` isn't a valid capture group, then the empty string is returned.
-    pub fn at<'r>(&'r self, i: uint) -> &'r str {
+    pub fn at(&self, i: uint) -> &'r str {
+        // We're not reusing the 'pos' method here since 'pos' reports offsets
+        // in terms of the original matched string.
         if i >= self.locs.len() {
             return ""
         }
-        let &(s, e) = self.locs.get(i);
-        self.max_match.slice(s, e)
+        match *self.locs.get(i) {
+            None => "",
+            Some((s, e)) => self.max_match.slice(s, e),
+        }
     }
 
     /// Returns the matched string for the capture group named `name`.
     /// If `name` isn't a valid capture group, then the empty string is 
     /// returned.
-    pub fn name<'r>(&'r self, name: &str) -> &'r str {
+    pub fn name(&self, name: &str) -> &'r str {
         match self.named.find(&name.to_owned()) {
             None => "",
             Some(i) => self.at(*i),
@@ -338,29 +349,31 @@ impl Captures {
     /// Returns `(0, 0)` if `i` is not a valid capture group.
     /// The positions returned are *always* byte indices with respect to the 
     /// original string matched.
-    pub fn pos(&self, i: uint) -> (uint, uint) {
+    pub fn pos(&self, i: uint) -> Option<(uint, uint)> {
         if i >= self.locs.len() {
-            return (0u, 0u)
+            return None
         }
-        let (s, e) = *self.locs.get(i);
-        (s + self.offset, e + self.offset)
+        match *self.locs.get(i) {
+            None => None,
+            Some((s, e)) => Some((s + self.offset, e + self.offset)),
+        }
     }
 
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
-    pub fn iter<'r>(&'r self) -> SubCaptures<'r> {
+    pub fn iter(&'r self) -> SubCaptures<'r> {
         SubCaptures { idx: 0, caps: self, }
     }
 
     /// Creates an iterator of all the capture group positions in order of 
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos<'r>(&'r self) -> SubCapturesPos<'r> {
+    pub fn iter_pos(&'r self) -> SubCapturesPos<'r> {
         SubCapturesPos { idx: 0, caps: self, }
     }
 }
 
-impl Container for Captures {
+impl<'r> Container for Captures<'r> {
     fn len(&self) -> uint {
         self.locs.len()
     }
@@ -370,7 +383,7 @@ impl Container for Captures {
 /// expression.
 pub struct SubCaptures<'r> {
     idx: uint,
-    caps: &'r Captures,
+    caps: &'r Captures<'r>,
 }
 
 impl<'r> Iterator<&'r str> for SubCaptures<'r> {
@@ -390,11 +403,11 @@ impl<'r> Iterator<&'r str> for SubCaptures<'r> {
 /// Positions are byte indices in terms of the original string matched.
 pub struct SubCapturesPos<'r> {
     idx: uint,
-    caps: &'r Captures,
+    caps: &'r Captures<'r>,
 }
 
-impl<'r> Iterator<(uint, uint)> for SubCapturesPos<'r> {
-    fn next(&mut self) -> Option<(uint, uint)> {
+impl<'r> Iterator<Option<(uint, uint)>> for SubCapturesPos<'r> {
+    fn next(&mut self) -> Option<Option<(uint, uint)>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.pos(self.idx - 1))
@@ -408,13 +421,13 @@ impl<'r> Iterator<(uint, uint)> for SubCapturesPos<'r> {
 /// particular regular expression.
 pub struct FindCaptures<'r> {
     re: &'r Regexp,
-    text: ~str,
+    text: &'r str,
     last_match: uint,
     last_end: uint,
 }
 
-impl<'r> Iterator<Captures> for FindCaptures<'r> {
-    fn next(&mut self) -> Option<Captures> {
+impl<'r> Iterator<Captures<'r>> for FindCaptures<'r> {
+    fn next(&mut self) -> Option<Captures<'r>> {
         if self.last_end > self.text.len() {
             return None
         }

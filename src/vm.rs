@@ -5,14 +5,14 @@ use super::compile::{Inst, Char, CharClass, Any,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
-pub type CaptureIndices = Vec<(uint, uint)>;
+pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 
-pub fn run(insts: &[Inst], input: &str) -> Option<CaptureIndices> {
-    Vm {
+pub fn run(insts: &[Inst], input: &str) -> CaptureIndices {
+    unflatten_capture_locations(Vm {
         insts: insts,
         input: input.chars().collect(),
         byte_inds: char_to_byte_indices(input),
-    }.run().map(unflatten_capture_locations)
+    }.run())
 }
 
 fn char_to_byte_indices(input: &str) -> Vec<uint> {
@@ -25,27 +25,32 @@ fn char_to_byte_indices(input: &str) -> Vec<uint> {
     inds
 }
 
-fn unflatten_capture_locations(locs: Vec<uint>) -> Vec<(uint, uint)> {
+fn unflatten_capture_locations(locs: Vec<Option<uint>>) -> CaptureIndices {
     let mut caps = Vec::with_capacity(locs.len() / 2);
     for win in locs.as_slice().chunks(2) {
-        caps.push((win[0], win[1]))
+        match (win[0], win[1]) {
+            (Some(s), Some(e)) => caps.push(Some((s, e))),
+            (None, None) => caps.push(None),
+            wins => fail!("BUG: Invalid capture group: {}", wins),
+        }
     }
     caps
 }
 
 struct Thread {
     pc: uint,
-    groups: Vec<uint>,
+    groups: Vec<Option<uint>>,
 }
 
 impl Thread {
-    fn new(pc: uint, groups: &[uint]) -> Thread {
+    fn new(pc: uint, groups: &[Option<uint>]) -> Thread {
         // Dunno if this conditional is needed. Perhaps the from_slice is
         // automatically optimized away when len(groups) == 0.
         // FIXME: Benchmark this.
         if groups.len() == 0 {
             Thread { pc: pc, groups: vec!(), }
         } else {
+            println!("COPYING SAVED GROUPS");
             Thread { pc: pc, groups: Vec::from_slice(groups) }
         }
     }
@@ -72,7 +77,7 @@ impl Threads {
         }
     }
 
-    fn add(&mut self, pc: uint, groups: &[uint]) {
+    fn add(&mut self, pc: uint, groups: &[Option<uint>]) {
         assert!(pc < self.sparse.len());
         if !self.contains(pc) {
             *self.sparse.get_mut(pc) = self.size;
@@ -95,12 +100,8 @@ impl Threads {
         self.queue.get(i).pc
     }
 
-    fn groups<'r>(&'r mut self, i: uint) -> &'r mut [uint] {
+    fn groups<'r>(&'r mut self, i: uint) -> &'r mut [Option<uint>] {
         self.queue.get_mut(i).groups.as_mut_slice()
-    }
-
-    fn save(&mut self, i: uint, slot: uint, ic: uint) {
-        *self.queue.get_mut(i).groups.get_mut(slot) = ic
     }
 }
 
@@ -111,20 +112,21 @@ struct Vm<'r> {
 }
 
 impl<'r> Vm<'r> {
-    fn run(&self) -> Option<Vec<uint>> {
-        let mut matched = false;
+    fn run(&self) -> Vec<Option<uint>> {
         let mut clist = Threads::new(self.insts.len());
         let mut nlist = Threads::new(self.insts.len());
-        let mut groups = Vec::from_elem(numcaps(self.insts.as_slice()), 0u);
+        let mut groups = Vec::from_elem(numcaps(self.insts.as_slice()), None);
         self.add(&mut clist, 0, 0, groups.as_mut_slice());
 
         for ic in iter::range_inclusive(0, self.input.len()) {
+            if clist.size == 0 && nlist.size == 0 {
+                break
+            }
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
                 match self.insts[pc] {
                     Match => {
-                        matched = true;
                         groups = Vec::from_slice(clist.groups(i));
                         clist.empty();
                     }
@@ -164,14 +166,11 @@ impl<'r> Vm<'r> {
             mem::swap(&mut clist, &mut nlist);
             nlist.empty();
         }
-        if matched {
-            Some(groups)
-        } else {
-            None
-        }
+        groups
     }
 
-    fn add(&self, nlist: &mut Threads, pc: uint, ic: uint, groups: &mut [uint]) {
+    fn add(&self, nlist: &mut Threads, pc: uint, ic: uint,
+           groups: &mut [Option<uint>]) {
         if nlist.contains(pc) {
             return
         }
@@ -205,8 +204,9 @@ impl<'r> Vm<'r> {
                 }
             }
             Save(slot) => {
+                // println!("SAVE {}", slot); 
                 let old = groups[slot];
-                groups[slot] = *self.byte_inds.get(ic);
+                groups[slot] = self.byte_index(ic);
                 self.add(nlist, pc + 1, ic, groups);
                 groups[slot] = old;
             }
@@ -217,6 +217,14 @@ impl<'r> Vm<'r> {
             }
             // Handled in 'run'
             Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {},
+        }
+    }
+
+    fn byte_index(&self, ic: uint) -> Option<uint> {
+        if ic >= self.byte_inds.len() {
+            None
+        } else {
+            Some(*self.byte_inds.get(ic))
         }
     }
 
