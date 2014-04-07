@@ -1,7 +1,7 @@
 use super::parse;
 use super::parse::{Nothing, Literal, Dot, Class, Begin, End, WordBoundary};
 use super::parse::{Capture, Cat, Alt, Rep};
-use super::parse::{ZeroOne, ZeroMore, OneMore, Greedy, Ungreedy};
+use super::parse::{ZeroOne, ZeroMore, OneMore, Ungreedy};
 
 type InstIdx = uint;
 

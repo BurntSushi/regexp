@@ -1,7 +1,5 @@
 use collections::HashMap;
 use std::from_str::from_str;
-use std::iter;
-use std::slice;
 use std::str;
 
 use super::Error;

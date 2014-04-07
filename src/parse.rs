@@ -2,7 +2,6 @@ use std::char;
 use std::cmp;
 use std::from_str::FromStr;
 use std::iter;
-use std::mem;
 use std::num;
 use std::str;
 
