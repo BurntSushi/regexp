@@ -1,12 +1,14 @@
 use collections::HashMap;
 use std::from_str::from_str;
+use std::iter;
 use std::slice;
 use std::str;
 
 use super::Error;
 use super::compile::{Inst, compile};
 use super::parse::parse;
-use super::vm::{CaptureIndices, run};
+use super::vm;
+use super::vm::CaptureIndices;
 
 /// Regexp is a compiled regular expression.
 pub struct Regexp {
@@ -31,15 +33,16 @@ impl Regexp {
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
     fn run(&self, text: &str) -> CaptureIndices {
-        run(self.prog.as_slice(), text)
+        let search = SearchText::from_str(text);
+        search.exec(self)
     }
 
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
-        self.has_match(self.run(text))
+        self.has_match(&self.run(text))
     }
 
-    fn has_match(&self, caps: CaptureIndices) -> bool {
+    fn has_match(&self, caps: &CaptureIndices) -> bool {
         caps.len() > 0 && caps.get(0).is_some()
     }
 
@@ -51,10 +54,10 @@ impl Regexp {
 
     /// Iterates through each successive non-overlapping match in `text`,
     /// returning the start and end byte indices with respect to `text`.
-    pub fn find_iter<'r>(&'r self, text: &str) -> FindMatches<'r> {
+    pub fn find_iter<'r>(&'r self, text: &'r str) -> FindMatches<'r> {
         FindMatches {
             re: self,
-            text: text.to_owned(),
+            search: SearchText::from_str(text),
             last_end: 0,
             last_match: 0,
         }
@@ -64,13 +67,9 @@ impl Regexp {
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
     pub fn captures<'r>(&self, text: &'r str) -> Option<Captures<'r>> {
-        let locs = self.run(text);
-        let end = match *locs.get(0) {
-            None => return None,
-            Some((_, e)) => e,
-        };
-        let max_match = text.slice(0, end);
-        Some(Captures::from_locs(max_match, self.names.as_slice(), locs))
+        let search = SearchText::from_str(text);
+        let caps = search.exec(self);
+        Captures::new(self, &search, caps)
     }
 
     /// Returns an iterator over all the non-overlapping capture groups matched
@@ -79,7 +78,7 @@ impl Regexp {
     pub fn captures_iter<'r>(&'r self, text: &'r str) -> FindCaptures<'r> {
         FindCaptures {
             re: self,
-            text: text,
+            search: SearchText::from_str(text),
             last_match: 0,
             last_end: 0,
         }
@@ -89,7 +88,7 @@ impl Regexp {
     /// of the regular expression.
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
-    pub fn split<'r, 't>(&'r self, text: &'t str) -> RegexpSplits<'r, 't> {
+    pub fn split<'r>(&'r self, text: &'r str) -> RegexpSplits<'r> {
         RegexpSplits {
             finder: self.find_iter(text),
             text: text,
@@ -102,8 +101,8 @@ impl Regexp {
     /// substrings.)
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
-    pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: uint)
-                         -> RegexpSplitsN<'r, 't> {
+    pub fn splitn<'r>(&'r self, text: &'r str, limit: uint)
+                         -> RegexpSplitsN<'r> {
         RegexpSplitsN {
             splits: self.split(text),
             cur: 0,
@@ -162,7 +161,6 @@ impl Regexp {
             new.push_str(rep.replace(&cap));
             last_match = e;
         }
-        println!("REPLACED: {}", i);
         new.push_str(text.slice(last_match, text.len()));
         new
     }
@@ -227,14 +225,14 @@ impl<'r> Replacer for 'r |&Captures| -> ~str {
 }
 
 /// Yields all substrings delimited by a regular expression match.
-pub struct RegexpSplits<'r, 't> {
+pub struct RegexpSplits<'r> {
     finder: FindMatches<'r>,
-    text: &'t str,
+    text: &'r str,
     last: uint,
 }
 
-impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
-    fn next(&mut self) -> Option<&'t str> {
+impl<'r> Iterator<&'r str> for RegexpSplits<'r> {
+    fn next(&mut self) -> Option<&'r str> {
         match self.finder.next() {
             None => {
                 if self.last >= self.text.len() {
@@ -257,14 +255,14 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
 /// Yields at most `N` substrings delimited by a regular expression match.
 ///
 /// The last substring will be whatever remains after splitting.
-pub struct RegexpSplitsN<'r, 't> {
-    splits: RegexpSplits<'r, 't>,
+pub struct RegexpSplitsN<'r> {
+    splits: RegexpSplits<'r>,
     cur: uint,
     limit: uint,
 }
 
-impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
-    fn next(&mut self) -> Option<&'t str> {
+impl<'r> Iterator<&'r str> for RegexpSplitsN<'r> {
+    fn next(&mut self) -> Option<&'r str> {
         if self.cur >= self.limit {
             None
         } else {
@@ -287,19 +285,21 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 /// via the `name` method. (Note that the 0th capture is always unnamed and so
 /// must be accessed with the `at` method.)
 pub struct Captures<'r> {
-    max_match: &'r str,
+    text: &'r str,
     locs: CaptureIndices,
     named: HashMap<~str, uint>,
     offset: uint,
 }
 
 impl<'r> Captures<'r> {
-    /// Creates a new group of captures from the matched string, a list of
-    /// capture names and a list of locations.
-    fn from_locs(s: &'r str, names: &[Option<~str>],
-                 locs: CaptureIndices) -> Captures<'r> {
+    fn new<'r>(re: &Regexp, search: &SearchText<'r>,
+               locs: CaptureIndices) -> Option<Captures<'r>> {
+        if !re.has_match(&locs) {
+            return None
+        }
+
         let mut named = HashMap::new();
-        for (i, name) in names.iter().enumerate() {
+        for (i, name) in re.names.iter().enumerate() {
             match name {
                 &None => {},
                 &Some(ref name) => {
@@ -307,42 +307,12 @@ impl<'r> Captures<'r> {
                 }
             }
         }
-        Captures {
-            max_match: s,
+        Some(Captures {
+            text: search.text,
             locs: locs,
             named: named,
             offset: 0,
-        }
-    }
-
-    /// Adds offset to each location in the captures so that `pos` always
-    /// returns byte indices in the original string.
-    fn adjust_locations(&mut self, offset: uint) {
-        self.offset = offset;
-    }
-
-    /// Returns the matched string for the capture group `i`.
-    /// If `i` isn't a valid capture group, then the empty string is returned.
-    pub fn at(&self, i: uint) -> &'r str {
-        // We're not reusing the 'pos' method here since 'pos' reports offsets
-        // in terms of the original matched string.
-        if i >= self.locs.len() {
-            return ""
-        }
-        match *self.locs.get(i) {
-            None => "",
-            Some((s, e)) => self.max_match.slice(s, e),
-        }
-    }
-
-    /// Returns the matched string for the capture group named `name`.
-    /// If `name` isn't a valid capture group, then the empty string is 
-    /// returned.
-    pub fn name(&self, name: &str) -> &'r str {
-        match self.named.find(&name.to_owned()) {
-            None => "",
-            Some(i) => self.at(*i),
-        }
+        })
     }
 
     /// Returns the start and end positions of the Nth capture group.
@@ -353,9 +323,27 @@ impl<'r> Captures<'r> {
         if i >= self.locs.len() {
             return None
         }
-        match *self.locs.get(i) {
-            None => None,
-            Some((s, e)) => Some((s + self.offset, e + self.offset)),
+        *self.locs.get(i)
+    }
+
+    /// Returns the matched string for the capture group `i`.
+    /// If `i` isn't a valid capture group, then the empty string is returned.
+    pub fn at(&self, i: uint) -> &'r str {
+        match self.pos(i) {
+            None => "",
+            Some((s, e)) => {
+                self.text.slice(s, e)
+            }
+        }
+    }
+
+    /// Returns the matched string for the capture group named `name`.
+    /// If `name` isn't a valid capture group, then the empty string is 
+    /// returned.
+    pub fn name(&self, name: &str) -> &'r str {
+        match self.named.find(&name.to_owned()) {
+            None => "",
+            Some(i) => self.at(*i),
         }
     }
 
@@ -421,36 +409,42 @@ impl<'r> Iterator<Option<(uint, uint)>> for SubCapturesPos<'r> {
 /// particular regular expression.
 pub struct FindCaptures<'r> {
     re: &'r Regexp,
-    text: &'r str,
+    search: SearchText<'r>,
     last_match: uint,
     last_end: uint,
 }
 
 impl<'r> Iterator<Captures<'r>> for FindCaptures<'r> {
     fn next(&mut self) -> Option<Captures<'r>> {
-        if self.last_end > self.text.len() {
+        if self.last_end > self.search.chars.len() {
             return None
         }
-        let caps = {
-            let t = self.text.slice(self.last_end, self.text.len());
-            self.re.captures(t)
-        };
-        match caps {
-            None => None,
-            Some(mut caps) => {
-                caps.adjust_locations(self.last_end);
 
-                // Don't accept empty matches immediately following a match.
-                // i.e., no infinite loops please.
-                if caps.at(0).len() == 0 && self.last_end == self.last_match {
-                    self.last_end += 1;
-                    return self.next()
-                }
-                self.last_end += caps.max_match.len();
-                self.last_match = self.last_end;
-                Some(caps)
-            }
+        let uni_caps = self.search.exec_slice(self.re,
+                                              self.last_end,
+                                              self.search.chars.len());
+        let (us, ue) =
+            if !self.re.has_match(&uni_caps) {
+                return None
+            } else {
+                uni_caps.get(0).unwrap()
+            };
+        let char_len = ue - us;
+
+        // Don't accept empty matches immediately following a match.
+        // i.e., no infinite loops please.
+        if char_len == 0 && self.last_end == self.last_match {
+            self.last_end += 1;
+            return self.next()
         }
+
+        let bytei = self.search.bytei.as_slice();
+        let byte_caps = cap_to_byte_indices(uni_caps, bytei);
+        let caps = Captures::new(self.re, &self.search, byte_caps);
+
+        self.last_end = ue;
+        self.last_match = self.last_end;
+        caps
     }
 }
 
@@ -460,36 +454,86 @@ impl<'r> Iterator<Captures<'r>> for FindCaptures<'r> {
 /// of the match. The indices are byte offsets.
 pub struct FindMatches<'r> {
     re: &'r Regexp,
-    text: ~str,
+    search: SearchText<'r>,
     last_match: uint,
     last_end: uint,
 }
 
 impl<'r> Iterator<(uint, uint)> for FindMatches<'r> {
     fn next(&mut self) -> Option<(uint, uint)> {
-        if self.last_end > self.text.len() {
+        if self.last_end > self.search.chars.len() {
             return None
         }
-        let find = {
-            let t = self.text.slice(self.last_end, self.text.len());
-            self.re.find(t)
-        };
-        match find {
-            None => None,
-            Some((mut s, mut e)) => {
-                s += self.last_end;
-                e += self.last_end;
 
-                // Don't accept empty matches immediately following a match.
-                // i.e., no infinite loops please.
-                if self.last_end == e && self.last_end == self.last_match {
-                    self.last_end += 1;
-                    return self.next()
-                }
-                self.last_end = e;
-                self.last_match = self.last_end;
-                Some((s, e))
-            }
+        let uni_caps = self.search.exec_slice(self.re,
+                                              self.last_end,
+                                              self.search.chars.len());
+        let (us, ue) =
+            if !self.re.has_match(&uni_caps) {
+                return None
+            } else {
+                uni_caps.get(0).unwrap()
+            };
+        let char_len = ue - us;
+
+        // Don't accept empty matches immediately following a match.
+        // i.e., no infinite loops please.
+        if char_len == 0 && self.last_end == self.last_match {
+            self.last_end += 1;
+            return self.next()
         }
+
+        self.last_end = ue;
+        self.last_match = self.last_end;
+        Some((*self.search.bytei.get(us), *self.search.bytei.get(ue)))
     }
+}
+
+struct SearchText<'r> {
+    text: &'r str,
+    chars: Vec<char>,
+    bytei: Vec<uint>,
+}
+
+impl<'r> SearchText<'r> {
+    fn from_str(input: &'r str) -> SearchText<'r> {
+        let chars = input.chars().collect();
+        let bytei = char_to_byte_indices(input);
+        SearchText { text: input, chars: chars, bytei: bytei }
+    }
+
+    fn exec(&self, re: &Regexp) -> CaptureIndices {
+        let caps = vm::run(re.prog.as_slice(), self.chars.as_slice());
+        cap_to_byte_indices(caps, self.bytei.as_slice())
+    }
+
+    fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CaptureIndices {
+        let chars = self.chars.as_slice().slice(us, ue);
+        let caps = vm::run(re.prog.as_slice(), chars);
+        caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
+    }
+}
+
+impl<'r> Container for SearchText<'r> {
+    fn len(&self) -> uint {
+        self.text.len()
+    }
+}
+
+fn cap_to_byte_indices(mut cis: CaptureIndices, bis: &[uint])
+                      -> CaptureIndices {
+    for v in cis.mut_iter() {
+        *v = v.map(|(s, e)| (bis[s], bis[e]))
+    }
+    cis
+}
+
+fn char_to_byte_indices(input: &str) -> Vec<uint> {
+    let mut bytei = Vec::with_capacity(input.len());
+    for (bi, _) in input.char_indices() {
+        bytei.push(bi);
+    }
+    // Push one more for the length.
+    bytei.push(input.len());
+    bytei
 }

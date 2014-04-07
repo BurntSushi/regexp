@@ -167,8 +167,8 @@ fn wat() {
     // print_matches("(a+|b)*", "ab"); 
     // print_matches("(aba|a*b)*", "ababa"); 
     // print_matches("(a(b)?)+", "aba"); 
-    // print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ"); 
+    print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ");
     // print_matches("(aa)|(bb)", "bb"); 
-    print_matches("(>[^\n]+)?\n", ">name\nactg\n>name2\ngtca");
+    // print_matches("(>[^\n]+)?\n", ">name\nactg\n>name2\ngtca"); 
 }
 

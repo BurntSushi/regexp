@@ -992,13 +992,3 @@ static PERL_CLASSES: Class = &[
             ('\r', '\r'), (' ', ' ')]),
     ("w", &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')]),
 ];
-
-
-#[cfg(test)]
-mod test {
-    #[test]
-    #[ignore]
-    fn simple() {
-        debug!("{}", super::parse("a(?i)nd"));
-    }
-}

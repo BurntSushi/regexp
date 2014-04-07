@@ -85,7 +85,7 @@ mod testold {
     use super::vm;
 
     #[test]
-    #[ignore]
+    // #[ignore] 
     fn other() {
         let r = Regexp::new(r"(\S+)\s+(?P<last>\S+)\s*").unwrap();
         let text = "andrew gallant    kaitlyn brady";

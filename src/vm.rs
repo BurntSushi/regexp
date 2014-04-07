@@ -7,22 +7,11 @@ use super::compile::{Inst, Char, CharClass, Any,
 
 pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 
-pub fn run(insts: &[Inst], input: &str) -> CaptureIndices {
+pub fn run(insts: &[Inst], input: &[char]) -> CaptureIndices {
     unflatten_capture_locations(Vm {
         insts: insts,
-        input: input.chars().collect(),
-        byte_inds: char_to_byte_indices(input),
+        input: input,
     }.run())
-}
-
-fn char_to_byte_indices(input: &str) -> Vec<uint> {
-    let mut inds = Vec::with_capacity(input.len());
-    for (bytei, _) in input.char_indices() {
-        inds.push(bytei)
-    }
-    // Push one more for the length.
-    inds.push(input.len());
-    inds
 }
 
 fn unflatten_capture_locations(locs: Vec<Option<uint>>) -> CaptureIndices {
@@ -43,16 +32,8 @@ struct Thread {
 }
 
 impl Thread {
-    fn new(pc: uint, groups: &[Option<uint>]) -> Thread {
-        // Dunno if this conditional is needed. Perhaps the from_slice is
-        // automatically optimized away when len(groups) == 0.
-        // FIXME: Benchmark this.
-        if groups.len() == 0 {
-            Thread { pc: pc, groups: vec!(), }
-        } else {
-            println!("COPYING SAVED GROUPS");
-            Thread { pc: pc, groups: Vec::from_slice(groups) }
-        }
+    fn new(pc: uint, groups: Vec<Option<uint>>) -> Thread {
+        Thread { pc: pc, groups: groups }
     }
 }
 
@@ -69,9 +50,11 @@ impl Threads {
     // throughout execution.
     //
     // See http://research.swtch.com/sparse for the deets.
-    fn new(num_insts: uint) -> Threads {
+    fn new(num_insts: uint, num_caps: uint) -> Threads {
         Threads {
-            queue: Vec::from_fn(num_insts, |_| Thread::new(0, [])),
+            queue: Vec::from_fn(num_insts, |_| {
+                Thread::new(0, Vec::from_elem(num_caps, None))
+            }),
             sparse: Vec::from_elem(num_insts, 0u),
             size: 0,
         }
@@ -80,14 +63,18 @@ impl Threads {
     fn add(&mut self, pc: uint, groups: &[Option<uint>]) {
         assert!(pc < self.sparse.len());
         if !self.contains(pc) {
+            let t = self.queue.get_mut(self.size);
+            t.pc = pc;
+            for (i, &v) in groups.iter().enumerate() {
+                *t.groups.get_mut(i) = v
+            }
             *self.sparse.get_mut(pc) = self.size;
-            *self.queue.get_mut(self.size) = Thread::new(pc, groups);
             self.size += 1;
         }
     }
 
+    #[inline(always)]
     fn contains(&self, pc: uint) -> bool {
-        assert!(pc < self.sparse.len());
         let s = *self.sparse.get(pc);
         s < self.size && self.queue.get(s).pc == pc
     }
@@ -107,15 +94,16 @@ impl Threads {
 
 struct Vm<'r> {
     insts: &'r [Inst],
-    input: Vec<char>,
-    byte_inds: Vec<uint>, // maps char index to byte index
+    input: &'r [char],
 }
 
 impl<'r> Vm<'r> {
     fn run(&self) -> Vec<Option<uint>> {
-        let mut clist = Threads::new(self.insts.len());
-        let mut nlist = Threads::new(self.insts.len());
-        let mut groups = Vec::from_elem(numcaps(self.insts.as_slice()), None);
+        let num_caps = numcaps(self.insts);
+        let mut clist = Threads::new(self.insts.len(), num_caps);
+        let mut nlist = Threads::new(self.insts.len(), num_caps);
+
+        let mut groups = Vec::from_elem(num_caps, None);
         self.add(&mut clist, 0, 0, groups.as_mut_slice());
 
         for ic in iter::range_inclusive(0, self.input.len()) {
@@ -204,9 +192,8 @@ impl<'r> Vm<'r> {
                 }
             }
             Save(slot) => {
-                // println!("SAVE {}", slot); 
                 let old = groups[slot];
-                groups[slot] = self.byte_index(ic);
+                groups[slot] = Some(ic);
                 self.add(nlist, pc + 1, ic, groups);
                 groups[slot] = old;
             }
@@ -217,14 +204,6 @@ impl<'r> Vm<'r> {
             }
             // Handled in 'run'
             Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {},
-        }
-    }
-
-    fn byte_index(&self, ic: uint) -> Option<uint> {
-        if ic >= self.byte_inds.len() {
-            None
-        } else {
-            Some(*self.byte_inds.get(ic))
         }
     }
 
@@ -246,7 +225,7 @@ impl<'r> Vm<'r> {
         if ic >= self.input.len() {
             return false
         }
-        let c = *self.input.get(ic);
+        let c = self.input[ic];
         c == '_'
         || (c >= '0' && c <= '9')
         || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -266,11 +245,11 @@ impl<'r> Vm<'r> {
     }
 
     fn char_is(&self, ic: uint, c: char) -> bool {
-        ic < self.input.len() && *self.input.get(ic) == c
+        ic < self.input.len() && self.input[ic] == c
     }
 
     fn get(&self, ic: uint) -> char {
-        *self.input.get(ic)
+        self.input[ic]
     }
 }
 

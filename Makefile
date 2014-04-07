@@ -7,7 +7,7 @@ compile:
 	rustc --opt-level=3 ./src/lib.rs
 
 install:
-	cargo-lite install
+	cargo-lite install --debug
 
 ctags:
 	ctags --recurse --options=ctags.rust --languages=Rust
