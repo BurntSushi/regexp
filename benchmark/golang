@@ -1,0 +1,37 @@
+Golang
+------
+cd go/src/pkg/regexp
+go test -run ' ' -bench .
+
+Literal                      10000000      229 ns/op
+NotLiteral                   500000       3354 ns/op
+MatchClass                   500000       5092 ns/op
+MatchClass_InRange           500000       4200 ns/op
+ReplaceAll                   500000       3548 ns/op
+AnchoredLiteralShortNonMatch 20000000      145 ns/op
+AnchoredLiteralLongNonMatch  20000000      142 ns/op
+AnchoredShortMatch           5000000       381 ns/op
+AnchoredLongMatch            5000000       383 ns/op
+OnePassShortA                1000000      1045 ns/op
+NotOnePassShortA             1000000      2478 ns/op
+OnePassShortB                2000000       766 ns/op
+NotOnePassShortB             1000000      2216 ns/op
+OnePassLongPrefix            10000000      156 ns/op
+OnePassLongNotPrefix         5000000       614 ns/op
+MatchEasy0_32                20000000      114 ns/op  279.35 MB/s
+MatchEasy0_1K                5000000       653 ns/op 1566.63 MB/s
+MatchEasy0_32K               200000      12624 ns/op 2595.57 MB/s
+MatchEasy0_1M                5000       458608 ns/op 2286.43 MB/s
+MatchEasy1_32                20000000     96.7 ns/op  330.99 MB/s
+MatchEasy1_1K                1000000      2647 ns/op  386.74 MB/s
+MatchEasy1_32K               50000       57848 ns/op  566.45 MB/s
+MatchEasy1_1M                1000      1991274 ns/op  526.59 MB/s
+MatchMedium_32               1000000      1746 ns/op   18.33 MB/s
+MatchMedium_1K               50000       58501 ns/op   17.50 MB/s
+MatchMedium_32K              1000      1914850 ns/op   17.11 MB/s
+MatchMedium_1M               50       61487227 ns/op   17.05 MB/s
+MatchHard_32                 500000       2918 ns/op   10.97 MB/s
+MatchHard_1K                 20000       92338 ns/op   11.09 MB/s
+MatchHard_32K                1000      2979930 ns/op   11.00 MB/s
+MatchHard_1M                 20       95889705 ns/op   10.94 MB/s
+

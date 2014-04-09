@@ -115,20 +115,7 @@ impl Regexp {
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
     pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> ~str {
-        let caps =
-            match self.captures(text) {
-                None => return ~"",
-                Some(caps) => caps,
-            };
-        let (s, e) = match caps.pos(0) {
-            None => return text.to_owned(), // hmm, switch to MaybeOwned?
-            Some((s, e)) => (s, e),
-        };
-        let mut new = str::with_capacity(text.len());
-        new.push_str(text.slice(0, s));
-        new.push_str(rep.replace(&caps));
-        new.push_str(text.slice(e, text.len()));
-        new
+        self.replacen(text, 1, rep)
     }
 
     /// Replaces all non-overlapping matches in `text` with the 
@@ -156,7 +143,7 @@ impl Regexp {
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
             new.push_str(text.slice(last_match, s));
-            new.push_str(rep.replace(&cap));
+            new.push_str(rep.reg_replace(&cap));
             last_match = e;
         }
         new.push_str(text.slice(last_match, text.len()));
@@ -189,35 +176,36 @@ pub fn expand(caps: &Captures, text: &str) -> ~str {
     // FIXME: Marginal improvement: get a syntax extension re! to prevent
     //        recompilation every time.
     let re = Regexp::new(r"(^|[^$])\$(\w+)").unwrap();
-    re.replace_all(text, |refs: &Captures| -> ~str {
+    let text = re.replace_all(text, |refs: &Captures| -> ~str {
         let (pre, name) = (refs.at(1), refs.at(2));
         pre + match from_str::<uint>(name) {
             None => caps.name(name).to_owned(),
             Some(i) => caps.at(i).to_owned(),
         }
-    })
+    });
+    text.replace("$$", "$")
 }
 
 /// Replacer describes types that can be used to replace matches in a string.
 pub trait Replacer {
-    fn replace(&self, caps: &Captures) -> ~str;
+    fn reg_replace(&self, caps: &Captures) -> ~str;
 }
 
 impl<'r> Replacer for NoExpand<'r> {
-    fn replace(&self, _: &Captures) -> ~str {
+    fn reg_replace(&self, _: &Captures) -> ~str {
         let NoExpand(s) = *self;
         s.to_owned()
     }
 }
 
 impl<'r> Replacer for &'r str {
-    fn replace(&self, caps: &Captures) -> ~str {
+    fn reg_replace(&self, caps: &Captures) -> ~str {
         expand(caps, *self)
     }
 }
 
 impl<'r> Replacer for 'r |&Captures| -> ~str {
-    fn replace(&self, caps: &Captures) -> ~str {
+    fn reg_replace(&self, caps: &Captures) -> ~str {
         (*self)(caps)
     }
 }

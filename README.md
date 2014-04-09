@@ -21,4 +21,3 @@ from Russ Cox in his
 and from the
 [Go implementation of RE2](http://golang.org/pkg/regexp/syntax/).
 
-
