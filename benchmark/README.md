@@ -39,6 +39,8 @@ hard_1M                            84727823 ns/iter (+/- 2590458) = 11 MB/s
 
 Golang
 ------
+Benchmarks are taken from the `regexp` package included in the Go distribution.
+
 ```
 cd go/src/pkg/regexp
 go test -run ' ' -bench .
