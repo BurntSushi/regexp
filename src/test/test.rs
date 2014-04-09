@@ -3,17 +3,17 @@ use super::super::{Regexp, NoExpand};
 #[test]
 fn splitn() {
     let re = Regexp::new(r"\d+").unwrap();
-    let text = "cauchy123plato456tyler789binks";
+    let text = "cauchy123plato456tyler789binx";
     let subs: Vec<&str> = re.splitn(text, 2).collect();
-    assert_eq!(subs, vec!("cauchy", "plato456tyler789binks"));
+    assert_eq!(subs, vec!("cauchy", "plato456tyler789binx"));
 }
 
 #[test]
 fn split() {
     let re = Regexp::new(r"\d+").unwrap();
-    let text = "cauchy123plato456tyler789binks";
+    let text = "cauchy123plato456tyler789binx";
     let subs: Vec<&str> = re.split(text).collect();
-    assert_eq!(subs, vec!("cauchy", "plato", "tyler", "binks"));
+    assert_eq!(subs, vec!("cauchy", "plato", "tyler", "binx"));
 }
 
 macro_rules! replace(
