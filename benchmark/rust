@@ -1,35 +1,39 @@
 rustc --opt-level=3 -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
-./build/bench --bench
+RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench
 
-literal                                3425 ns/iter (+/- 87)
-not_literal                            4016 ns/iter (+/- 130)
-match_class                            5470 ns/iter (+/- 171)
-match_class_in_range                   5599 ns/iter (+/- 196)
-replace_all                            7479 ns/iter (+/- 506)
-anchored_literal_short_non_match       2917 ns/iter (+/- 183)
-anchored_literal_long_non_match       20746 ns/iter (+/- 1348)
-anchored_literal_short_match           2083 ns/iter (+/- 129)
-anchored_literal_long_match            4323 ns/iter (+/- 193)
-one_pass_short_a                       4632 ns/iter (+/- 148)
-one_pass_short_a_not                   4577 ns/iter (+/- 268)
-one_pass_short_b                       3960 ns/iter (+/- 132)
-one_pass_short_b_not                   4175 ns/iter (+/- 399)
-one_pass_long_prefix                   5296 ns/iter (+/- 270)
-one_pass_long_prefix_not               5382 ns/iter (+/- 285)
-easy0_32                               4862 ns/iter (+/- 112)     = 6 MB/s
-easy0_1K                              53492 ns/iter (+/- 3837)    = 19 MB/s
-easy0_32K                           1598644 ns/iter (+/- 95182)   = 20 MB/s
-easy0_1M                           52294598 ns/iter (+/- 2254936) = 19 MB/s
-easy1_32                               3644 ns/iter (+/- 123)     = 8 MB/s
-easy1_1K                              52566 ns/iter (+/- 1383)    = 19 MB/s
-easy1_32K                           1592652 ns/iter (+/- 58514)   = 20 MB/s
-easy1_1M                           51788272 ns/iter (+/- 1152957) = 19 MB/s
-medium_32                              5243 ns/iter (+/- 213)     = 6 MB/s
-medium_1K                             64623 ns/iter (+/- 3563)    = 15 MB/s
-medium_32K                          1866701 ns/iter (+/- 66780)   = 17 MB/s
-medium_1M                          60509478 ns/iter (+/- 761637)  = 16 MB/s
-hard_32                                6285 ns/iter (+/- 114)     = 5 MB/s
-hard_1K                               85483 ns/iter (+/- 2719)    = 11 MB/s
-hard_32K                            2620292 ns/iter (+/- 41568)   = 12 MB/s
-hard_1M                            84727823 ns/iter (+/- 2590458) = 11 MB/s
+running 32 tests
+test test::bench::anchored_literal_long_match      ... [36mbench(B[m:      3939 ns/iter (+/- 97)
+test test::bench::anchored_literal_long_non_match  ... [36mbench(B[m:     11533 ns/iter (+/- 181)
+test test::bench::anchored_literal_short_match     ... [36mbench(B[m:      1743 ns/iter (+/- 38)
+test test::bench::anchored_literal_short_non_match ... [36mbench(B[m:      2006 ns/iter (+/- 13)
+test test::bench::easy0_1K                         ... [36mbench(B[m:      8483 ns/iter (+/- 381) = 120 MB/s
+test test::bench::easy0_1M                         ... [36mbench(B[m:   6335238 ns/iter (+/- 267519) = 164 MB/s
+test test::bench::easy0_32                         ... [36mbench(B[m:      2480 ns/iter (+/- 20) = 12 MB/s
+test test::bench::easy0_32K                        ... [36mbench(B[m:    180659 ns/iter (+/- 1515) = 181 MB/s
+test test::bench::easy1_1K                         ... [36mbench(B[m:      8796 ns/iter (+/- 913) = 116 MB/s
+test test::bench::easy1_1M                         ... [36mbench(B[m:   7248695 ns/iter (+/- 268324) = 143 MB/s
+test test::bench::easy1_32                         ... [36mbench(B[m:      2082 ns/iter (+/- 140) = 15 MB/s
+test test::bench::easy1_32K                        ... [36mbench(B[m:    209389 ns/iter (+/- 5129) = 156 MB/s
+test test::bench::hard_1K                          ... [36mbench(B[m:     61243 ns/iter (+/- 342) = 16 MB/s
+test test::bench::hard_1M                          ... [36mbench(B[m:  59970318 ns/iter (+/- 546537) = 16 MB/s
+test test::bench::hard_32                          ... [36mbench(B[m:      5345 ns/iter (+/- 71) = 5 MB/s
+test test::bench::hard_32K                         ... [36mbench(B[m:   1854857 ns/iter (+/- 18104) = 17 MB/s
+test test::bench::hard_64K                         ... [36mbench(B[m:   3738764 ns/iter (+/- 43385) = 17 MB/s
+test test::bench::literal                          ... [36mbench(B[m:      1067 ns/iter (+/- 26)
+test test::bench::match_class                      ... [36mbench(B[m:      3551 ns/iter (+/- 38)
+test test::bench::match_class_in_range             ... [36mbench(B[m:      3665 ns/iter (+/- 22)
+test test::bench::medium_1K                        ... [36mbench(B[m:     38730 ns/iter (+/- 1547) = 26 MB/s
+test test::bench::medium_1M                        ... [36mbench(B[m:  37496383 ns/iter (+/- 264828) = 27 MB/s
+test test::bench::medium_32                        ... [36mbench(B[m:      3422 ns/iter (+/- 117) = 9 MB/s
+test test::bench::medium_32K                       ... [36mbench(B[m:   1153465 ns/iter (+/- 5596) = 28 MB/s
+test test::bench::not_literal                      ... [36mbench(B[m:      2616 ns/iter (+/- 85)
+test test::bench::one_pass_long_prefix             ... [36mbench(B[m:      4539 ns/iter (+/- 23)
+test test::bench::one_pass_long_prefix_not         ... [36mbench(B[m:      4477 ns/iter (+/- 30)
+test test::bench::one_pass_short_a                 ... [36mbench(B[m:      3850 ns/iter (+/- 139)
+test test::bench::one_pass_short_a_not             ... [36mbench(B[m:      3921 ns/iter (+/- 18)
+test test::bench::one_pass_short_b                 ... [36mbench(B[m:      2879 ns/iter (+/- 68)
+test test::bench::one_pass_short_b_not             ... [36mbench(B[m:      3167 ns/iter (+/- 35)
+test test::bench::replace_all                      ... [36mbench(B[m:      5655 ns/iter (+/- 381)
+
+test result: [32mok(B[m. 0 passed; 0 failed; 0 ignored; 32 measured
 

@@ -4,37 +4,37 @@ Rust
 rustc --opt-level=3 -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
 ./build/bench --bench
 
-literal                                3425 ns/iter (+/- 87)
-not_literal                            4016 ns/iter (+/- 130)
-match_class                            5470 ns/iter (+/- 171)
-match_class_in_range                   5599 ns/iter (+/- 196)
-replace_all                            7479 ns/iter (+/- 506)
-anchored_literal_short_non_match       2917 ns/iter (+/- 183)
-anchored_literal_long_non_match       20746 ns/iter (+/- 1348)
-anchored_literal_short_match           2083 ns/iter (+/- 129)
-anchored_literal_long_match            4323 ns/iter (+/- 193)
-one_pass_short_a                       4632 ns/iter (+/- 148)
-one_pass_short_a_not                   4577 ns/iter (+/- 268)
-one_pass_short_b                       3960 ns/iter (+/- 132)
-one_pass_short_b_not                   4175 ns/iter (+/- 399)
-one_pass_long_prefix                   5296 ns/iter (+/- 270)
-one_pass_long_prefix_not               5382 ns/iter (+/- 285)
-easy0_32                               4862 ns/iter (+/- 112)     = 6 MB/s
-easy0_1K                              53492 ns/iter (+/- 3837)    = 19 MB/s
-easy0_32K                           1598644 ns/iter (+/- 95182)   = 20 MB/s
-easy0_1M                           52294598 ns/iter (+/- 2254936) = 19 MB/s
-easy1_32                               3644 ns/iter (+/- 123)     = 8 MB/s
-easy1_1K                              52566 ns/iter (+/- 1383)    = 19 MB/s
-easy1_32K                           1592652 ns/iter (+/- 58514)   = 20 MB/s
-easy1_1M                           51788272 ns/iter (+/- 1152957) = 19 MB/s
-medium_32                              5243 ns/iter (+/- 213)     = 6 MB/s
-medium_1K                             64623 ns/iter (+/- 3563)    = 15 MB/s
-medium_32K                          1866701 ns/iter (+/- 66780)   = 17 MB/s
-medium_1M                          60509478 ns/iter (+/- 761637)  = 16 MB/s
-hard_32                                6285 ns/iter (+/- 114)     = 5 MB/s
-hard_1K                               85483 ns/iter (+/- 2719)    = 11 MB/s
-hard_32K                            2620292 ns/iter (+/- 41568)   = 12 MB/s
-hard_1M                            84727823 ns/iter (+/- 2590458) = 11 MB/s
+literal                                1067 ns/iter (+/- 26)
+not_literal                            2616 ns/iter (+/- 85)
+match_class                            3551 ns/iter (+/- 38)
+match_class_in_range                   3665 ns/iter (+/- 22)
+replace_all                            5655 ns/iter (+/- 381)
+anchored_literal_short_non_match       2006 ns/iter (+/- 13)
+anchored_literal_long_non_match       11533 ns/iter (+/- 181)
+anchored_literal_short_match           1743 ns/iter (+/- 38)
+anchored_literal_long_match            3939 ns/iter (+/- 97)
+one_pass_short_a                       3850 ns/iter (+/- 139)
+one_pass_short_a_not                   3921 ns/iter (+/- 18)
+one_pass_short_b                       2879 ns/iter (+/- 68)
+one_pass_short_b_not                   3167 ns/iter (+/- 35)
+one_pass_long_prefix                   4539 ns/iter (+/- 23)
+one_pass_long_prefix_not               4477 ns/iter (+/- 30)
+easy0_32                               2480 ns/iter (+/- 20) = 12 MB/s
+easy0_1K                               8483 ns/iter (+/- 381) = 120 MB/s
+easy0_32K                            180659 ns/iter (+/- 1515) = 181 MB/s
+easy0_1M                            6335238 ns/iter (+/- 267519) = 164 MB/s
+easy1_32                               2082 ns/iter (+/- 140) = 15 MB/s
+easy1_1K                               8796 ns/iter (+/- 913) = 116 MB/s
+easy1_32K                            209389 ns/iter (+/- 5129) = 156 MB/s
+easy1_1M                            7248695 ns/iter (+/- 268324) = 143 MB/s
+medium_32                              3422 ns/iter (+/- 117) = 9 MB/s
+medium_1K                             38730 ns/iter (+/- 1547) = 26 MB/s
+medium_32K                          1153465 ns/iter (+/- 5596) = 28 MB/s
+medium_1M                          37496383 ns/iter (+/- 264828) = 27 MB/s
+hard_32                                5345 ns/iter (+/- 71) = 5 MB/s
+hard_1K                               61243 ns/iter (+/- 342) = 16 MB/s
+hard_32K                            1854857 ns/iter (+/- 18104) = 17 MB/s
+hard_1M                            59970318 ns/iter (+/- 546537) = 16 MB/s
 ```
 
 Golang
@@ -82,28 +82,21 @@ MatchHard_1M                 20       95889705 ns/op   10.94 MB/s
 Very rough benchmark analysis
 -----------------------------
 All benchmarks were taken from RE2/Go and hopefully implemented correctly.
+Both RE2/Rust and RE2/Go are benchmarked with an implicit `.*?` prefixing all 
+regular expressions. (i.e., They are unachored unless there is an explicit 
+'^'.)
 
 RE2/Rust gets absolutely clobbered by RE2/Go in the Easy{0,1} benchmarks. 
 Interestingly, Rust does the same or better on the Medium/Hard benchmarks. My 
 suspicion is that RE2/Go is performing some optimizations on the easy 
 benchmarks to make the throughput very high. This gives me hope.
 
-For example, the EASY0 regex is just matching a literal string at the end of a 
-search string, which could be recognized as such by RE2/Go and fall back to 
-simply checking the suffix of a string.
+For example, the EASY{0,1} benchmarks are subject to optimization. RE2/Rust
+does do some optimization with literal prefix strings (explaining the higher
+throughput when compared to the MEDIUM/HARD benchmarks).
 
-The EASY1 regex isn't as fast, but I think is also optimized as described in 
-the section on the 'FilteredRE2' class here:
-http://swtch.com/~rsc/regexp/regexp3.html
-
-Interestingly, it looks like the MEDIUM regex isn't subjected to a similar 
-optimization?
-
-The HARD regex is certainly difficult to optimize because of the leading
-`[ -~]*` which probably explains its lower throughput.
-
-Note that BOTH RE2/Rust and RE2/Go are benchmarked with an implicit `.*?` 
-prefixing all regular expressions. (i.e., They are unachored.)
+It's promising that RE2/Rust is beating RE2/Go on the MEDIUM/HARD benchmarks, 
+which I think suggests that the core VM implementation is probably decent.
 
 Also note that RE2/Rust is performing much worse on the small Medium/Hard 
 benchmarks (searching 32 bytes of text). My suspicion is that there are some 

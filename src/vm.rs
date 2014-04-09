@@ -162,8 +162,6 @@ impl<'r> Vm<'r> {
                 if self.prog.prefix.len() > 0 && clist.size == 0 {
                     let needle = self.prog.prefix.as_slice();
                     let haystack = self.input.as_slice().slice_from(ic);
-                    // debug!("needle: {}, haystack: {}, find: {}", 
-                           // needle, haystack, find_prefix(needle, haystack)); 
                     match find_prefix(needle, haystack) {
                         None => return Vec::from_elem(num_caps * 2, None),
                         Some(i) => ic += i,
@@ -184,12 +182,12 @@ impl<'r> Vm<'r> {
                 match *self.prog.insts.get(pc) {
                     Match => {
                         if !self.caps {
-                            // FIXME: This is a terrible hack that is used to
+                            // This is a terrible hack that is used to
                             // indicate a match when the caller doesn't want
                             // any capture groups.
-                            // The right way to do this, I think, is to create
-                            // a separate VM for non-capturing search.
-                            groups = vec!(Some(0), Some(0))
+                            // We can bail out super early since we don't
+                            // care about matching leftmost-longest.
+                            return vec!(Some(0), Some(0))
                         } else {
                             groups = Vec::from_slice(clist.groups(i))
                         }
