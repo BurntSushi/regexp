@@ -1,29 +1,53 @@
-// FIXME: Currently, there is one VM. Ideally, we'd have multiple VMs that
-// can be used for different purposes. For example, if we don't need captures
-// (i.e., 'is_match'), then the VM can be drastically simplified and allocation
-// reduced.
+// FIXME: Currently, the VM simulates an NFA. It would be nice to have another
+// VM that simulates a DFA.
 //
-// So the TODO item here is to come up with a better abstraction for writing
-// a VM. A nice start would be a trait, but I suspect that multiple VMs will
-// share a lot of code. So find a way to reuse it.
+// According to Russ Cox[1], a DFA performs better than an NFA, principally
+// because it reuses states previously computed by the machine *and* doesn't
+// keep track of capture groups. The drawback of a DFA (aside from its 
+// complexity) is that it can't accurately return the locations of submatches. 
+// The NFA *can* do that.
+//
+// Cox suggests that a DFA ought to be used to answer "does this match" and
+// "where does it match" questions. (In the latter, the starting position of
+// the match is computed by executing the regexp backwards.) Cox also suggests
+// that a DFA should be run when asking "where are the submatches", which can
+// 1) quickly answer "no" is there's no match and 2) discover the substring
+// that matches, which means running the NFA on smaller input.
+//
+// Currently, the NFA simulation implemented below does some dirty tricks to
+// avoid tracking capture groups when they aren't needed (which only works
+// for 'is_match', not 'find'). This is a half-measure, but does provide some
+// perf improvement.
+//
+// AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
 
-use std::cmp;
-use std::iter;
 use std::mem;
-use super::compile::{Inst, Char, CharClass, Any,
+use super::compile::{Program, Char, CharClass, Any,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
 pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 
-pub fn run(insts: &[Inst], input: &[char], caps: bool) -> CaptureIndices {
+/// Runs an NFA simulation on the list of instructions and input given. (The
+/// input must have been decoded into a slice of UTF8 characters.)
+/// If 'caps' is true, then capture groups are tracked. When false, capture
+/// groups (and 'Save' instructions) are ignored.
+///
+/// Note that if 'caps' is false, the capture indices returned will always be
+/// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
+/// a match.
+pub fn run(prog: &Program, input: &[char], caps: bool) -> CaptureIndices {
     unflatten_capture_locations(Vm {
-        insts: insts,
+        prog: prog,
         input: input,
         caps: caps,
     }.run())
 }
 
+/// Converts the capture indices returned by a VM into tuples. It also makes
+/// sure that the following invariant holds: for a particular capture group
+/// k, the slots 2k and 2k+1 must both contain a location or must both be done
+/// by the time the VM is done executing. (Otherwise there is a bug in the VM.)
 fn unflatten_capture_locations(locs: Vec<Option<uint>>) -> CaptureIndices {
     let mut caps = Vec::with_capacity(locs.len() / 2);
     for win in locs.as_slice().chunks(2) {
@@ -57,13 +81,14 @@ impl Threads {
     // This is using a wicked neat trick to provide constant time lookup
     // for threads in the queue using a sparse set. A queue of threads is
     // allocated once with maximal size when the VM initializes and is reused
-    // throughout execution.
+    // throughout execution. That is, there should be zero allocation during
+    // the execution of a VM.
     //
     // See http://research.swtch.com/sparse for the deets.
     fn new(num_insts: uint, num_caps: uint) -> Threads {
         Threads {
             queue: Vec::from_fn(num_insts, |_| {
-                Thread::new(0, Vec::from_elem(num_caps, None))
+                Thread::new(0, Vec::from_elem(num_caps * 2, None))
             }),
             sparse: Vec::from_elem(num_insts, 0u),
             size: 0,
@@ -104,28 +129,59 @@ impl Threads {
 }
 
 struct Vm<'r> {
-    insts: &'r [Inst],
+    prog: &'r Program,
     input: &'r [char],
     caps: bool,
 }
 
 impl<'r> Vm<'r> {
     fn run(&self) -> Vec<Option<uint>> {
-        let num_caps = numcaps(self.insts);
-        let mut clist = Threads::new(self.insts.len(), num_caps);
-        let mut nlist = Threads::new(self.insts.len(), num_caps);
+        let num_caps = self.prog.num_captures();
+        let mut clist = Threads::new(self.prog.insts.len(), num_caps);
+        let mut nlist = Threads::new(self.prog.insts.len(), num_caps);
 
-        let mut groups = Vec::from_elem(num_caps, None);
-        self.add(&mut clist, 0, 0, groups.as_mut_slice());
+        let mut groups = Vec::from_elem(num_caps * 2, None);
 
-        for ic in iter::range_inclusive(0, self.input.len()) {
-            if clist.size == 0 && nlist.size == 0 {
-                break
+        // Try to look for a literal string prefix.j
+        // let mut start = 0; 
+
+        let mut ic = 0;
+        while ic <= self.input.len() {
+            if clist.size == 0 {
+                // We have a match and we're done exploring alternatives.
+                // Time to quit.
+                if groups.get(0).is_some() {
+                    break
+                }
+
+                // If there are no threads to try, then we'll have to start 
+                // over at the beginning of the regex.
+                // BUT, if there's a literal prefix for the program, try to 
+                // jump ahead quickly. If it can't be found, then we can bail 
+                // out early.
+                if self.prog.prefix.len() > 0 && clist.size == 0 {
+                    let needle = self.prog.prefix.as_slice();
+                    let haystack = self.input.as_slice().slice_from(ic);
+                    // debug!("needle: {}, haystack: {}, find: {}", 
+                           // needle, haystack, find_prefix(needle, haystack)); 
+                    match find_prefix(needle, haystack) {
+                        None => return Vec::from_elem(num_caps * 2, None),
+                        Some(i) => ic += i,
+                    }
+                }
             }
+
+            // This simulates a preceding '.*?' for every regex by adding
+            // a state starting at the current position in the input for the
+            // beginning of the program only if we don't already have a match.
+            if groups.get(0).is_none() {
+                self.add(&mut clist, 0, ic, groups.as_mut_slice())
+            }
+
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.insts[pc] {
+                match *self.prog.insts.get(pc) {
                     Match => {
                         if !self.caps {
                             // FIXME: This is a terrible hack that is used to
@@ -169,6 +225,7 @@ impl<'r> Vm<'r> {
             }
             mem::swap(&mut clist, &mut nlist);
             nlist.empty();
+            ic += 1;
         }
         groups
     }
@@ -192,7 +249,7 @@ impl<'r> Vm<'r> {
         //
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
-        match self.insts[pc] {
+        match *self.prog.insts.get(pc) {
             EmptyBegin(multi) => {
                 nlist.add(pc, groups, true);
                 if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {
@@ -312,13 +369,24 @@ fn class_cmp(casei: bool, mut textc: char,
     }
 }
 
-fn numcaps(insts: &[Inst]) -> uint {
-    let mut n = 0;
-    for inst in insts.iter() {
-        match *inst {
-            Save(c) => n = cmp::max(n, c+1),
-            _ => {}
-        }
+fn find_prefix(needle: &[char], haystack: &[char]) -> Option<uint> {
+    if needle.len() > haystack.len() || needle.len() == 0 {
+        return None
     }
-    n
+    let mut hayi = 0u;
+    'HAYSTACK: loop {
+        if hayi > haystack.len() - needle.len() {
+            break
+        }
+        let mut nedi = 0u;
+        while nedi < needle.len() {
+            if haystack[hayi+nedi] != needle[nedi] {
+                hayi += 1;
+                continue 'HAYSTACK
+            }
+            nedi += 1;
+        }
+        return Some(hayi)
+    }
+    None
 }

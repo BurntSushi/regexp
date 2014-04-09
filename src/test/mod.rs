@@ -50,9 +50,10 @@ mod debug {
         // print_matches("(aa)|(bb)", "bb"); 
         // print_matches("(>[^\n]+)?\n", ">name\nactg\n>name2\ngtca"); 
         // print_matches("[[:lower:]]+", "`az{"); 
-        print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ");
-        debug!("{}", Regexp::new("a*").unwrap().is_match("ba"));
+        // print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ"); 
         // print_matches(r"(a*)*", "ⅡⅢⅳⅥ"); 
+        // debug!("{}", Regexp::new("abcd").unwrap().is_match("watabcd")); 
+        debug!("{}", Regexp::new("multiple words").unwrap().is_match("multiple words yeah"));
     }
 }
 

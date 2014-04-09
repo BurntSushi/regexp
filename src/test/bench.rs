@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use rand::{Rng, task_rng};
 use stdtest::BenchHarness;
 use std::str;
@@ -20,6 +22,8 @@ fn not_literal(b: &mut BenchHarness) {
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
+
+/*
 
 #[bench]
 fn match_class(b: &mut BenchHarness) {
@@ -172,4 +176,4 @@ throughput!(hard_32K, HARD, 32<<10)
 throughput!(hard_64K, HARD, 64<<10)
 throughput!(hard_1M, HARD, 1<<20)
 // throughput!(hard_32M, HARD, 32<<20) 
-
+*/

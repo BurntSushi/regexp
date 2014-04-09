@@ -29,6 +29,22 @@ pub enum Ast {
     Rep(~Ast, Repeater, Greed),
 }
 
+// impl Ast { 
+    // pub fn literal_prefix(&self) -> ~str { 
+        // fn prefix(pre: ~str, ast: &Ast) -> ~str { 
+            // match ast { 
+                // &Cat(ref xs) => { 
+//  
+                // } 
+                // _ => break, 
+            // } 
+        // } 
+        // let mut pre = str::with_capacity(5); 
+        // let mut ast = self; 
+        // prefix(pre, ast) 
+    // } 
+// } 
+
 #[deriving(Show, Eq, Clone)]
 pub enum Repeater {
     ZeroOne,

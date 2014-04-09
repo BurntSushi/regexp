@@ -1,10 +1,13 @@
+use std::cmp;
+use std::iter;
 use super::parse;
 use super::parse::{Nothing, Literal, Dot, Class, Begin, End, WordBoundary};
 use super::parse::{Capture, Cat, Alt, Rep};
-use super::parse::{ZeroOne, ZeroMore, OneMore, Ungreedy};
+use super::parse::{ZeroOne, ZeroMore, OneMore};
 
 type InstIdx = uint;
 
+#[deriving(Show)]
 pub enum Inst {
     // When a Match instruction is executed, the current thread is successful.
     Match,
@@ -52,24 +55,50 @@ pub enum Inst {
     Split(InstIdx, InstIdx),
 }
 
-pub fn compile(ast: ~parse::Ast) -> (Vec<Inst>, Vec<Option<~str>>) {
-    let mut c = Compiler {
-        insts: Vec::with_capacity(100),
-        names: Vec::with_capacity(10),
-    };
+pub struct Program {
+    pub insts: Vec<Inst>,
+    pub names: Vec<Option<~str>>,
+    pub prefix: Vec<char>,
+}
 
-    // Start instructions with a '.*?' so that matching isn't anchored to
-    // the start of the input by default. Any text matched by the initial
-    // '.*?' isn't included in the overall match.
-    c.star(~Dot(true), Ungreedy);
+impl Program {
+    pub fn new(ast: ~parse::Ast) -> Program {
+        let mut c = Compiler {
+            insts: Vec::with_capacity(100),
+            names: Vec::with_capacity(10),
+        };
 
-    c.insts.push(Save(0));
-    c.compile(ast);
-    c.insts.push(Save(1));
-    c.insts.push(Match);
+        c.insts.push(Save(0));
+        c.compile(ast);
+        c.insts.push(Save(1));
+        c.insts.push(Match);
 
-    let names = c.names.clone();
-    (c.insts, names)
+        // Try to discover a literal string prefix.
+        // This is a bit hacky since we have to skip over the initial
+        // 'Save' instruction.
+        let mut pre = Vec::with_capacity(5);
+        for i in iter::range(1, c.insts.len()) {
+            match *c.insts.get(i) {
+                Char(c, false) => pre.push(c),
+                _ => break
+            }
+        }
+
+        let names = c.names.clone();
+        Program { insts: c.insts, names: names, prefix: pre }
+    }
+
+    pub fn num_captures(&self) -> uint {
+        let mut n = 0;
+        for inst in self.insts.iter() {
+            match *inst {
+                Save(c) => n = cmp::max(n, c+1),
+                _ => {}
+            }
+        }
+        // There's exactly 2 Save slots for every capture.
+        n / 2
+    }
 }
 
 struct Compiler {
@@ -129,7 +158,19 @@ impl Compiler {
                 }
             }
             ~Rep(x, ZeroMore, g) => {
-                self.star(x, g);
+                let j1 = self.insts.len();
+                let split = self.empty_split();
+                let j2 = self.insts.len();
+                self.compile(x);
+                let jmp = self.empty_jump();
+                let j3 = self.insts.len();
+
+                self.set_jump(jmp, j1);
+                if g.is_greedy() {
+                    self.set_split(split, j2, j3);
+                } else {
+                    self.set_split(split, j3, j2);
+                }
             }
             ~Rep(x, OneMore, g) => {
                 let j1 = self.insts.len();
@@ -178,22 +219,6 @@ impl Compiler {
         match *jmp {
             Jump(_) => *jmp = Jump(pc),
             _ => fail!("BUG: Invalid jump index."),
-        }
-    }
-
-    fn star(&mut self, sub: ~parse::Ast, greed: parse::Greed) {
-        let j1 = self.insts.len();
-        let split = self.empty_split();
-        let j2 = self.insts.len();
-        self.compile(sub);
-        let jmp = self.empty_jump();
-        let j3 = self.insts.len();
-
-        self.set_jump(jmp, j1);
-        if greed.is_greedy() {
-            self.set_split(split, j2, j3);
-        } else {
-            self.set_split(split, j3, j2);
         }
     }
 }

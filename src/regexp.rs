@@ -3,7 +3,7 @@ use std::from_str::from_str;
 use std::str;
 
 use super::Error;
-use super::compile::{Inst, compile};
+use super::compile::Program;
 use super::parse::parse;
 use super::vm;
 use super::vm::CaptureIndices;
@@ -11,8 +11,7 @@ use super::vm::CaptureIndices;
 /// Regexp is a compiled regular expression.
 pub struct Regexp {
     orig: ~str,
-    prog: Vec<Inst>,
-    names: Vec<Option<~str>>,
+    comp: Program,
 }
 
 impl Regexp {
@@ -20,11 +19,9 @@ impl Regexp {
     /// used repeatedly to search, split or replace text in a string.
     pub fn new(regex: &str) -> Result<Regexp, Error> {
         let ast = try!(parse(regex));
-        let (insts, cap_names) = compile(ast);
         Ok(Regexp {
             orig: regex.to_owned(),
-            prog: insts,
-            names: cap_names,
+            comp: Program::new(ast),
         })
     }
 
@@ -285,7 +282,7 @@ impl<'r> Captures<'r> {
         }
 
         let mut named = HashMap::new();
-        for (i, name) in re.names.iter().enumerate() {
+        for (i, name) in re.comp.names.iter().enumerate() {
             match name {
                 &None => {},
                 &Some(ref name) => {
@@ -492,13 +489,13 @@ impl<'r> SearchText<'r> {
     }
 
     fn exec(&self, re: &Regexp) -> CaptureIndices {
-        let caps = vm::run(re.prog.as_slice(), self.chars.as_slice(), self.caps);
+        let caps = vm::run(&re.comp, self.chars.as_slice(), self.caps);
         cap_to_byte_indices(caps, self.bytei.as_slice())
     }
 
     fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CaptureIndices {
         let chars = self.chars.as_slice().slice(us, ue);
-        let caps = vm::run(re.prog.as_slice(), chars, self.caps);
+        let caps = vm::run(&re.comp, chars, self.caps);
         caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
     }
 }

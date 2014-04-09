@@ -1,5 +1,5 @@
 use rand::task_rng;
-use super::super::compile::compile;
+use super::super::compile::Program;
 use super::super::parse::parse;
 use super::super::quote;
 use super::gen_regex_str;
@@ -19,5 +19,5 @@ fn large_str_compile() {
     // at 1MB of data.
     let g = &mut task_rng();
     let s = quote(gen_regex_str(g, 100000));
-    let _ = compile(parse(s).unwrap());
+    let _ = Program::new(parse(s).unwrap());
 }
