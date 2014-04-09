@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use rand::{Rng, task_rng};
 use stdtest::BenchHarness;
 use std::str;
