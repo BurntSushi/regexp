@@ -1,11 +1,13 @@
 use rand::Rng;
 use std::str;
 
-#[cfg(not(debug), large)]
+#[cfg(bench)]
+mod bench;
+#[cfg(large)]
 mod large;
-#[cfg(not(debug), quickcheck)]
+#[cfg(quickcheck)]
 mod quick;
-#[cfg(not(debug), not(quickcheck), not(large))]
+#[cfg(not(bench), not(debug), not(quickcheck), not(large))]
 mod test;
 
 #[allow(dead_code)]
@@ -49,6 +51,8 @@ mod debug {
         // print_matches("(>[^\n]+)?\n", ">name\nactg\n>name2\ngtca"); 
         // print_matches("[[:lower:]]+", "`az{"); 
         print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ");
+        debug!("{}", Regexp::new("a*").unwrap().is_match("ba"));
+        // print_matches(r"(a*)*", "ⅡⅢⅳⅥ"); 
     }
 }
 

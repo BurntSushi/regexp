@@ -1,5 +1,21 @@
 use super::super::Regexp;
 
+#[test]
+fn splitn() {
+    let re = Regexp::new(r"\d+").unwrap();
+    let text = "cauchy123plato123tyler123binks";
+    let subs: Vec<&str> = re.splitn(text, 2).collect();
+    assert_eq!(subs, vec!("cauchy", "plato123tyler123binks"));
+}
+
+#[test]
+fn split() {
+    let re = Regexp::new(r"\d+").unwrap();
+    let text = "cauchy123plato123tyler123binks";
+    let subs: Vec<&str> = re.split(text).collect();
+    assert_eq!(subs, vec!("cauchy", "plato", "tyler", "binks"));
+}
+
 macro_rules! fail_parse(
     ($name:ident, $re:expr) => (
         #[test]

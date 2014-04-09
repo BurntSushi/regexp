@@ -146,15 +146,18 @@ impl Compiler {
         }
     }
 
+    #[inline(always)]
     fn push(&mut self, x: Inst) {
         self.insts.push(x)
     }
 
+    #[inline(always)]
     fn empty_split(&mut self) -> InstIdx {
         self.insts.push(Split(0, 0));
         self.insts.len() - 1
     }
 
+    #[inline(always)]
     fn set_split(&mut self, i: InstIdx, pc1: InstIdx, pc2: InstIdx) {
         let split = self.insts.get_mut(i);
         match *split {
@@ -163,11 +166,13 @@ impl Compiler {
         }
     }
 
+    #[inline(always)]
     fn empty_jump(&mut self) -> InstIdx {
         self.insts.push(Jump(0));
         self.insts.len() - 1
     }
 
+    #[inline(always)]
     fn set_jump(&mut self, i: InstIdx, pc: InstIdx) {
         let jmp = self.insts.get_mut(i);
         match *jmp {

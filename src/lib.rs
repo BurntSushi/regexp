@@ -13,6 +13,9 @@ extern crate collections;
 extern crate log;
 extern crate rand;
 
+#[cfg(bench)]
+extern crate stdtest = "test";
+
 #[cfg(quickcheck)]
 extern crate quickcheck;
 

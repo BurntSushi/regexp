@@ -1,3 +1,12 @@
+// FIXME: Currently, there is one VM. Ideally, we'd have multiple VMs that
+// can be used for different purposes. For example, if we don't need captures
+// (i.e., 'is_match'), then the VM can be drastically simplified and allocation
+// reduced.
+//
+// So the TODO item here is to come up with a better abstraction for writing
+// a VM. A nice start would be a trait, but I suspect that multiple VMs will
+// share a lot of code. So find a way to reuse it.
+
 use std::cmp;
 use std::iter;
 use std::mem;
@@ -7,10 +16,11 @@ use super::compile::{Inst, Char, CharClass, Any,
 
 pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 
-pub fn run(insts: &[Inst], input: &[char]) -> CaptureIndices {
+pub fn run(insts: &[Inst], input: &[char], caps: bool) -> CaptureIndices {
     unflatten_capture_locations(Vm {
         insts: insts,
         input: input,
+        caps: caps,
     }.run())
 }
 
@@ -60,17 +70,18 @@ impl Threads {
         }
     }
 
-    fn add(&mut self, pc: uint, groups: &[Option<uint>]) {
-        assert!(pc < self.sparse.len());
-        if !self.contains(pc) {
-            let t = self.queue.get_mut(self.size);
-            t.pc = pc;
-            for (i, &v) in groups.iter().enumerate() {
-                *t.groups.get_mut(i) = v
+    fn add(&mut self, pc: uint, groups: &[Option<uint>], empty: bool) {
+        let t = self.queue.get_mut(self.size);
+        t.pc = pc;
+        if !empty {
+            let mut i = 0;
+            while i < groups.len() {
+                *t.groups.get_mut(i) = groups[i];
+                i += 1;
             }
-            *self.sparse.get_mut(pc) = self.size;
-            self.size += 1;
         }
+        *self.sparse.get_mut(pc) = self.size;
+        self.size += 1;
     }
 
     #[inline(always)]
@@ -95,6 +106,7 @@ impl Threads {
 struct Vm<'r> {
     insts: &'r [Inst],
     input: &'r [char],
+    caps: bool,
 }
 
 impl<'r> Vm<'r> {
@@ -115,7 +127,16 @@ impl<'r> Vm<'r> {
                 let pc = clist.pc(i);
                 match self.insts[pc] {
                     Match => {
-                        groups = Vec::from_slice(clist.groups(i));
+                        if !self.caps {
+                            // FIXME: This is a terrible hack that is used to
+                            // indicate a match when the caller doesn't want
+                            // any capture groups.
+                            // The right way to do this, I think, is to create
+                            // a separate VM for non-capturing search.
+                            groups = vec!(Some(0), Some(0))
+                        } else {
+                            groups = Vec::from_slice(clist.groups(i))
+                        }
                         clist.empty();
                     }
                     Char(c, casei) => {
@@ -141,13 +162,8 @@ impl<'r> Vm<'r> {
                             self.add(&mut nlist, pc+1, ic+1, clist.groups(i))
                         }
                     }
-                    // These cases are handled in 'add'
-                    EmptyBegin(_) => {},
-                    EmptyEnd(_) => {},
-                    EmptyWordBoundary(_) => {},
-                    Save(_) => {},
-                    Jump(_) => {},
-                    Split(_, _) => {},
+                    EmptyBegin(_) | EmptyEnd(_) | EmptyWordBoundary(_)
+                    | Save(_) | Jump(_) | Split(_, _) => {},
                 }
                 i += 1;
             }
@@ -173,37 +189,50 @@ impl<'r> Vm<'r> {
         // VM loop, we look for them but simply ignore them.
         // Adding them to the queue prevents them from being revisited so we
         // can avoid cycles (and the inevitable stack overflow).
-        nlist.add(pc, groups);
         match self.insts[pc] {
             EmptyBegin(multi) => {
+                nlist.add(pc, groups, true);
                 if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
             EmptyEnd(multi) => {
+                nlist.add(pc, groups, true);
                 if self.is_end(ic) || (multi && self.char_is(ic, '\n')) {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
             EmptyWordBoundary(yes) => {
+                nlist.add(pc, groups, true);
                 let wb = self.is_word_boundary(ic);
                 if yes == wb {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
             Save(slot) => {
-                let old = groups[slot];
-                groups[slot] = Some(ic);
-                self.add(nlist, pc + 1, ic, groups);
-                groups[slot] = old;
+                nlist.add(pc, groups, true);
+                if !self.caps {
+                    self.add(nlist, pc + 1, ic, groups);
+                } else {
+                    let old = groups[slot];
+                    groups[slot] = Some(ic);
+                    self.add(nlist, pc + 1, ic, groups);
+                    groups[slot] = old;
+                }
             }
-            Jump(to) => self.add(nlist, to, ic, groups),
+            Jump(to) => {
+                nlist.add(pc, groups, true);
+                self.add(nlist, to, ic, groups)
+            }
             Split(x, y) => {
+                nlist.add(pc, groups, true);
                 self.add(nlist, x, ic, groups);
                 self.add(nlist, y, ic, groups);
             }
             // Handled in 'run'
-            Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {},
+            Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {
+                nlist.add(pc, groups, !self.caps);
+            }
         }
     }
 

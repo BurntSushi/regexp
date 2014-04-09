@@ -31,13 +31,13 @@ impl Regexp {
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
     fn run(&self, text: &str) -> CaptureIndices {
-        let search = SearchText::from_str(text);
+        let search = SearchText::from_str(text, true);
         search.exec(self)
     }
 
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
-        self.has_match(&self.run(text))
+        self.has_match(&SearchText::from_str(text, false).exec(self))
     }
 
     fn has_match(&self, caps: &CaptureIndices) -> bool {
@@ -55,7 +55,7 @@ impl Regexp {
     pub fn find_iter<'r>(&'r self, text: &'r str) -> FindMatches<'r> {
         FindMatches {
             re: self,
-            search: SearchText::from_str(text),
+            search: SearchText::from_str(text, true),
             last_end: 0,
             last_match: 0,
         }
@@ -65,7 +65,7 @@ impl Regexp {
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
     pub fn captures<'r>(&self, text: &'r str) -> Option<Captures<'r>> {
-        let search = SearchText::from_str(text);
+        let search = SearchText::from_str(text, true);
         let caps = search.exec(self);
         Captures::new(self, &search, caps)
     }
@@ -76,7 +76,7 @@ impl Regexp {
     pub fn captures_iter<'r>(&'r self, text: &'r str) -> FindCaptures<'r> {
         FindCaptures {
             re: self,
-            search: SearchText::from_str(text),
+            search: SearchText::from_str(text, true),
             last_match: 0,
             last_end: 0,
         }
@@ -491,25 +491,26 @@ struct SearchText<'r> {
     text: &'r str,
     chars: Vec<char>,
     bytei: Vec<uint>,
+    caps: bool,
 }
 
 // TODO: Choose better names. There's some complicated footwork going on here
 // to handle character and byte indices.
 impl<'r> SearchText<'r> {
-    fn from_str(input: &'r str) -> SearchText<'r> {
+    fn from_str(input: &'r str, caps: bool) -> SearchText<'r> {
         let chars = input.chars().collect();
         let bytei = char_to_byte_indices(input);
-        SearchText { text: input, chars: chars, bytei: bytei }
+        SearchText { text: input, chars: chars, bytei: bytei, caps: caps }
     }
 
     fn exec(&self, re: &Regexp) -> CaptureIndices {
-        let caps = vm::run(re.prog.as_slice(), self.chars.as_slice());
+        let caps = vm::run(re.prog.as_slice(), self.chars.as_slice(), self.caps);
         cap_to_byte_indices(caps, self.bytei.as_slice())
     }
 
     fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CaptureIndices {
         let chars = self.chars.as_slice().slice(us, ue);
-        let caps = vm::run(re.prog.as_slice(), chars);
+        let caps = vm::run(re.prog.as_slice(), chars, self.caps);
         caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
     }
 }
