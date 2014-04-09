@@ -17,6 +17,12 @@ install:
 ctags:
 	ctags --recurse --options=ctags.rust --languages=Rust
 
+match-tests:
+	./make-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
+
+unicode-tables:
+	./make-unicode-tables > ./src/unicode.rs
+
 docs: doc/regexp/index.html
 
 doc/regexp/index.html: $(SRCFILES)
