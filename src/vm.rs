@@ -178,7 +178,7 @@ impl<'r> Vm<'r> {
         if nlist.contains(pc) {
             return
         }
-        // This is absolutely critical to the *correctness* of the VM.
+        // We have to add states to the threads list even if their empty.
         // TL;DR - It prevents cycles.
         // If we didn't care about cycles, we'd *only* add threads that
         // correspond to non-jumping instructions (Char, Any, Match, etc.).
@@ -189,6 +189,9 @@ impl<'r> Vm<'r> {
         // VM loop, we look for them but simply ignore them.
         // Adding them to the queue prevents them from being revisited so we
         // can avoid cycles (and the inevitable stack overflow).
+        //
+        // We make a minor optimization by indicating that the state is "empty"
+        // so that its capture groups are not filled in.
         match self.insts[pc] {
             EmptyBegin(multi) => {
                 nlist.add(pc, groups, true);
@@ -231,6 +234,10 @@ impl<'r> Vm<'r> {
             }
             // Handled in 'run'
             Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {
+                // If captures are enabled, then we need to indicate that
+                // this isn't an empty state.
+                // Otherwise, we say it's an empty state (even though it isn't)
+                // so that capture groups aren't copied.
                 nlist.add(pc, groups, !self.caps);
             }
         }
