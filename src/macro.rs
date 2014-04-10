@@ -29,12 +29,6 @@ use regexp::program::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
 /// For the `re!` syntax extension. Do not use.
 #[macro_registrar]
 pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
-    reg(token::intern("re_dynamic"),
-        NormalTT(~BasicMacroExpander {
-            expander: re,
-            span: None,
-        },
-        None));
     reg(token::intern("re"),
         NormalTT(~BasicMacroExpander {
             expander: re_static,
@@ -81,37 +75,6 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     ))
 }
 
-fn re(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
-    let restr = match parse_one_str_lit(cx, tts) {
-        Some(re) => re,
-        None => return MacResult::dummy_expr(sp),
-    };
-
-    let re = match Regexp::new(restr.to_owned()) {
-        Ok(re) => re,
-        Err(err) => {
-            cx.span_err(sp, err.to_str());
-            return MacResult::dummy_expr(sp)
-        }
-    };
-    let insts = as_expr_vec(cx, sp, re.p.insts(), 
-        |cx, sp, inst| inst_to_expr(cx, sp, inst, false));
-    let names = as_expr_vec(cx, sp, re.p.names(),
-        |cx, _, name| match name {
-            &Some(ref name) => {
-                let name = name.as_slice();
-                quote_expr!(cx, Some(::std::str::Owned($name.to_owned())))
-            }
-            &None => quote_expr!(cx, None),
-        }
-    );
-    let prefix = as_expr_vec(cx, sp, re.p.prefix(),
-        |cx, _, &c| quote_expr!(cx, $c));
-    MRExpr(quote_expr!(&*cx,
-        regexp::program::make_regexp($restr, $insts, $names, $prefix)
-    ))
-}
-
 trait ToTokens {
     fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
 }
@@ -128,13 +91,13 @@ impl ToTokens for bool {
     }
 }
 
-fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst, stat: bool) -> @Expr {
+fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
     match inst {
         &Match => quote_expr!(&*cx, regexp::program::Match),
         &Char_(c, casei) =>
             quote_expr!(&*cx, regexp::program::Char_($c, $casei)),
         &CharClass(ref ranges, negated, casei) => {
-            char_class_to_expr(cx, sp, ranges, negated, casei, stat)
+            char_class_to_expr(cx, sp, ranges, negated, casei)
         }
         &Any_(multi) =>
             quote_expr!(&*cx, regexp::program::Any($multi)),
@@ -155,20 +118,12 @@ fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst, stat: bool) -> @Expr {
 
 fn char_class_to_expr(cx: &mut ExtCtxt, sp: Span,
                       ranges: &MaybeStaticClass,
-                      negated: bool, casei: bool, stat: bool) -> @Expr {
-    if stat {
-        let ranges = as_expr_vec_static(cx, sp, ranges.as_slice(),
-            |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
-        quote_expr!(&*cx,
-            regexp::program::CharClass(
-                regexp::program::StaticClass($ranges), $negated, $casei))
-    } else {
-        let ranges = as_expr_vec(cx, sp, ranges.as_slice(),
-            |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
-        quote_expr!(&*cx,
-            regexp::program::CharClass(
-                regexp::program::DynamicClass($ranges), $negated, $casei))
-    }
+                      negated: bool, casei: bool) -> @Expr {
+    let ranges = as_expr_vec_static(cx, sp, ranges.as_slice(),
+        |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
+    quote_expr!(&*cx,
+        regexp::program::CharClass(
+            regexp::program::StaticClass($ranges), $negated, $casei))
 }
 
 fn as_expr_vec_static<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
@@ -179,16 +134,6 @@ fn as_expr_vec_static<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
     }
     let vec_exprs = as_expr(sp, ExprVec(exprs));
     quote_expr!(&*cx, &'static $vec_exprs)
-}
-
-fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
-                  to_expr: |&mut ExtCtxt, Span, &T| -> @Expr) -> @Expr {
-    let mut exprs = vec!();
-    for x in xs.iter() {
-        exprs.push(to_expr(&mut *cx, sp, x))
-    }
-    let vec_exprs = as_expr(sp, ExprVec(exprs));
-    quote_expr!(&*cx, Vec::from_slice(&$vec_exprs))
 }
 
 fn as_expr(sp: Span, e: Expr_) -> @Expr {
