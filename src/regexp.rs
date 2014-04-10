@@ -3,15 +3,15 @@ use std::from_str::from_str;
 use std::str;
 
 use super::Error;
-use super::compile::Program;
+use super::compile::{Program, DynamicProgram};
 use super::parse::parse;
 use super::vm;
 use super::vm::CaptureIndices;
 
 /// Regexp is a compiled regular expression.
-pub struct Regexp {
-    orig: ~str,
-    comp: Program,
+#[allow(visible_private_types)]
+pub struct Regexp<P = DynamicProgram> {
+    pub p: P,
 }
 
 impl Regexp {
@@ -19,38 +19,37 @@ impl Regexp {
     /// used repeatedly to search, split or replace text in a string.
     pub fn new(regex: &str) -> Result<Regexp, Error> {
         let ast = try!(parse(regex));
-        Ok(Regexp {
-            orig: regex.to_owned(),
-            comp: Program::new(ast),
-        })
+        Ok(Regexp { p: DynamicProgram::new(regex, ast) })
     }
+}
 
+impl<'p, P: Program<'p>> Regexp<P> {
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
-    fn run(&self, text: &str) -> CaptureIndices {
+    fn run(&'p self, text: &str) -> CaptureIndices {
         let search = SearchText::from_str(text, true);
         search.exec(self)
     }
 
     /// Returns true if and only if the regexp matches the string given.
-    pub fn is_match(&self, text: &str) -> bool {
+    pub fn is_match(&'p self, text: &str) -> bool {
         self.has_match(&SearchText::from_str(text, false).exec(self))
     }
 
-    fn has_match(&self, caps: &CaptureIndices) -> bool {
+    fn has_match(&'p self, caps: &CaptureIndices) -> bool {
         caps.len() > 0 && caps.get(0).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-longest match in 
     /// `text`. If no match exists, then `None` is returned.
-    pub fn find(&self, text: &str) -> Option<(uint, uint)> {
-        println!("INSTS: {}", self.comp.insts);
+    pub fn find(&'p self, text: &str) -> Option<(uint, uint)> {
+        // println!("INSTS: {}", self.p.insts()); 
         *self.run(text).get(0)
     }
 
     /// Iterates through each successive non-overlapping match in `text`,
     /// returning the start and end byte indices with respect to `text`.
-    pub fn find_iter<'r>(&'r self, text: &'r str) -> FindMatches<'r> {
+    pub fn find_iter<'r>(&'p self, text: &'r str) -> FindMatches<'r, 'p, P> {
         FindMatches {
             re: self,
             search: SearchText::from_str(text, true),
@@ -62,7 +61,7 @@ impl Regexp {
     /// Returns the capture groups corresponding to the leftmost-longest
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
-    pub fn captures<'r>(&self, text: &'r str) -> Option<Captures<'r>> {
+    pub fn captures<'r>(&'p self, text: &'r str) -> Option<Captures<'r>> {
         let search = SearchText::from_str(text, true);
         let caps = search.exec(self);
         Captures::new(self, &search, caps)
@@ -71,7 +70,7 @@ impl Regexp {
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter` (except it
     /// yields capture groups and not positions).
-    pub fn captures_iter<'r>(&'r self, text: &'r str) -> FindCaptures<'r> {
+    pub fn captures_iter<'r>(&'p self, text: &'r str) -> FindCaptures<'r, 'p, P> {
         FindCaptures {
             re: self,
             search: SearchText::from_str(text, true),
@@ -84,7 +83,7 @@ impl Regexp {
     /// of the regular expression.
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
-    pub fn split<'r>(&'r self, text: &'r str) -> RegexpSplits<'r> {
+    pub fn split<'r>(&'p self, text: &'r str) -> RegexpSplits<'r, 'p, P> {
         RegexpSplits {
             finder: self.find_iter(text),
             text: text,
@@ -97,8 +96,8 @@ impl Regexp {
     /// substrings.)
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
-    pub fn splitn<'r>(&'r self, text: &'r str, limit: uint)
-                         -> RegexpSplitsN<'r> {
+    pub fn splitn<'r>(&'p self, text: &'r str, limit: uint)
+                         -> RegexpSplitsN<'r, 'p, P> {
         RegexpSplitsN {
             splits: self.split(text),
             cur: 0,
@@ -112,14 +111,14 @@ impl Regexp {
     /// `Captures` and returns the replaced string.
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
-    pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+    pub fn replace<R: Replacer>(&'p self, text: &str, rep: R) -> ~str {
         self.replacen(text, 1, rep)
     }
 
     /// Replaces all non-overlapping matches in `text` with the 
     /// replacement provided. This is the same as calling `replacen` with
     /// `limit` set to `0`.
-    pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+    pub fn replace_all<R: Replacer>(&'p self, text: &str, rep: R) -> ~str {
         self.replacen(text, 0, rep)
     }
 
@@ -127,7 +126,7 @@ impl Regexp {
     /// replacement provided. If `limit` is 0, then all non-overlapping matches
     /// are replaced.
     pub fn replacen<R: Replacer>
-                   (&self, text: &str, limit: uint, rep: R) -> ~str {
+                   (&'p self, text: &str, limit: uint, rep: R) -> ~str {
         let mut new = str::with_capacity(text.len());
         let mut last_match = 0u;
         let mut i = 0;
@@ -209,13 +208,13 @@ impl<'r> Replacer for 'r |&Captures| -> ~str {
 }
 
 /// Yields all substrings delimited by a regular expression match.
-pub struct RegexpSplits<'r> {
-    finder: FindMatches<'r>,
+pub struct RegexpSplits<'r, 'p, P> {
+    finder: FindMatches<'r, 'p, P>,
     text: &'r str,
     last: uint,
 }
 
-impl<'r> Iterator<&'r str> for RegexpSplits<'r> {
+impl<'r, 'p, P: Program<'p>> Iterator<&'r str> for RegexpSplits<'r, 'p, P> {
     fn next(&mut self) -> Option<&'r str> {
         match self.finder.next() {
             None => {
@@ -239,13 +238,13 @@ impl<'r> Iterator<&'r str> for RegexpSplits<'r> {
 /// Yields at most `N` substrings delimited by a regular expression match.
 ///
 /// The last substring will be whatever remains after splitting.
-pub struct RegexpSplitsN<'r> {
-    splits: RegexpSplits<'r>,
+pub struct RegexpSplitsN<'r, 'p, P> {
+    splits: RegexpSplits<'r, 'p, P>,
     cur: uint,
     limit: uint,
 }
 
-impl<'r> Iterator<&'r str> for RegexpSplitsN<'r> {
+impl<'r, 'p, P: Program<'p>> Iterator<&'r str> for RegexpSplitsN<'r, 'p, P> {
     fn next(&mut self) -> Option<&'r str> {
         if self.cur >= self.limit {
             None
@@ -276,18 +275,19 @@ pub struct Captures<'r> {
 }
 
 impl<'r> Captures<'r> {
-    fn new<'r>(re: &Regexp, search: &SearchText<'r>,
-               locs: CaptureIndices) -> Option<Captures<'r>> {
+    fn new<'r, 'p, P: Program<'p>>
+          (re: &'p Regexp<P>, search: &SearchText<'r>,
+           locs: CaptureIndices) -> Option<Captures<'r>> {
         if !re.has_match(&locs) {
             return None
         }
 
         let mut named = HashMap::new();
-        for (i, name) in re.comp.names.iter().enumerate() {
+        for (i, name) in re.p.names().iter().enumerate() {
             match name {
                 &None => {},
                 &Some(ref name) => {
-                    named.insert(name.to_owned(), i);
+                    named.insert(name.as_slice().to_owned(), i);
                 }
             }
         }
@@ -391,14 +391,14 @@ impl<'r> Iterator<Option<(uint, uint)>> for SubCapturesPos<'r> {
 
 /// An iterator that yields all non-overlapping capture groups matching a
 /// particular regular expression.
-pub struct FindCaptures<'r> {
-    re: &'r Regexp,
+pub struct FindCaptures<'r, 'p, P> {
+    re: &'p Regexp<P>,
     search: SearchText<'r>,
     last_match: uint,
     last_end: uint,
 }
 
-impl<'r> Iterator<Captures<'r>> for FindCaptures<'r> {
+impl<'r, 'p, P: Program<'p>> Iterator<Captures<'r>> for FindCaptures<'r, 'p, P> {
     fn next(&mut self) -> Option<Captures<'r>> {
         if self.last_end > self.search.chars.len() {
             return None
@@ -436,14 +436,14 @@ impl<'r> Iterator<Captures<'r>> for FindCaptures<'r> {
 ///
 /// The iterator yields a tuple of integers corresponding to the start and end
 /// of the match. The indices are byte offsets.
-pub struct FindMatches<'r> {
-    re: &'r Regexp,
+pub struct FindMatches<'r, 'p, P> {
+    re: &'p Regexp<P>,
     search: SearchText<'r>,
     last_match: uint,
     last_end: uint,
 }
 
-impl<'r> Iterator<(uint, uint)> for FindMatches<'r> {
+impl<'r, 'p, P: Program<'p>> Iterator<(uint, uint)> for FindMatches<'r, 'p, P> {
     fn next(&mut self) -> Option<(uint, uint)> {
         if self.last_end > self.search.chars.len() {
             return None
@@ -489,14 +489,15 @@ impl<'r> SearchText<'r> {
         SearchText { text: input, chars: chars, bytei: bytei, caps: caps }
     }
 
-    fn exec(&self, re: &Regexp) -> CaptureIndices {
-        let caps = vm::run(&re.comp, self.chars.as_slice(), self.caps);
+    fn exec<'p, P: Program<'p>>(&self, re: &'p Regexp<P>) -> CaptureIndices {
+        let caps = vm::run(&re.p, self.chars.as_slice(), self.caps);
         cap_to_byte_indices(caps, self.bytei.as_slice())
     }
 
-    fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CaptureIndices {
+    fn exec_slice<'p, P: Program<'p>>
+                 (&self, re: &'p Regexp<P>, us: uint, ue: uint) -> CaptureIndices {
         let chars = self.chars.as_slice().slice(us, ue);
-        let caps = vm::run(&re.comp, chars, self.caps);
+        let caps = vm::run(&re.p, chars, self.caps);
         caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
     }
 }
@@ -523,163 +524,4 @@ fn char_to_byte_indices(input: &str) -> Vec<uint> {
     // Push one more for the length.
     bytei.push(input.len());
     bytei
-}
-
-pub mod macro {
-    use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
-    use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
-    use syntax::codemap::{Span, DUMMY_SP};
-    use syntax::ext::base::{SyntaxExtension,
-                            ExtCtxt,
-                            MacResult,
-                            MRExpr,
-                            NormalTT,
-                            BasicMacroExpander};
-    use syntax::parse;
-    use syntax::parse::token;
-    use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
-
-    use super::Regexp;
-    use super::super::compile::Program;
-    use super::super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
-    use super::super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
-
-    #[macro_registrar]
-    pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
-        reg(token::intern("re"),
-            NormalTT(~BasicMacroExpander {
-                expander: expand_re,
-                span: None,
-            },
-            None));
-    }
-
-    fn expand_re(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
-        let restr = match parse_one_str_lit(cx, tts) {
-            Some(re) => re,
-            None => return MacResult::dummy_expr(sp),
-        };
-
-        let re = match Regexp::new(restr.to_owned()) {
-            Ok(re) => re,
-            Err(err) => {
-                cx.span_err(sp, err.to_str());
-                return MacResult::dummy_expr(sp)
-            }
-        };
-        let insts = as_expr_vec(cx, sp, re.comp.insts.as_slice(),
-                                inst_to_expr);
-        let names = as_expr_vec(cx, sp, re.comp.names.as_slice(),
-            |cx, _, name| match name {
-                &Some(ref name) => quote_expr!(cx, Some($name.to_owned())),
-                &None => quote_expr!(cx, None),
-            }
-        );
-        let prefix = as_expr_vec(cx, sp, re.comp.prefix.as_slice(),
-            |cx, _, &c| quote_expr!(cx, $c));
-        MRExpr(quote_expr!(&*cx,
-            regexp::program::make_regexp($restr, $insts, $names, $prefix)
-        ))
-    }
-
-    trait ToTokens {
-        fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
-    }
-
-    impl ToTokens for char {
-        fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
-            vec!(TTTok(DUMMY_SP, LIT_CHAR((*self) as u32)))
-        }
-    }
-
-    impl ToTokens for bool {
-        fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
-            vec!(TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
-        }
-    }
-
-    fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
-        match inst {
-            &Match => quote_expr!(&*cx, regexp::program::Match),
-            &Char_(c, casei) =>
-                quote_expr!(&*cx, regexp::program::Char_($c, $casei)),
-            &CharClass(ref ranges, negated, casei) => {
-                let ranges = as_expr_vec(cx, sp, ranges.as_slice(),
-                    |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
-                quote_expr!(
-                    &*cx, regexp::program::CharClass($ranges, $negated, $casei))
-            }
-            &Any_(multi) =>
-                quote_expr!(&*cx, regexp::program::Any($multi)),
-            &EmptyBegin(multi) =>
-                quote_expr!(&*cx, regexp::program::EmptyBegin($multi)),
-            &EmptyEnd(multi) =>
-                quote_expr!(&*cx, regexp::program::EmptyEnd($multi)),
-            &EmptyWordBoundary(multi) =>
-                quote_expr!(&*cx, regexp::program::EmptyWordBoundary($multi)),
-            &Save(slot) =>
-                quote_expr!(&*cx, regexp::program::Save($slot)),
-            &Jump(pc) =>
-                quote_expr!(&*cx, regexp::program::Jump($pc)),
-            &Split(x, y) =>
-                quote_expr!(&*cx, regexp::program::Split($x, $y)),
-        }
-    }
-
-    fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
-                      to_expr: |&mut ExtCtxt, Span, &T| -> @Expr) -> @Expr {
-        let mut exprs = vec!();
-        for x in xs.iter() {
-            exprs.push(to_expr(&mut *cx, sp, x))
-        }
-        let vec_exprs = as_expr(sp, ExprVec(exprs));
-        quote_expr!(&*cx, Vec::from_slice(&$vec_exprs))
-    }
-
-    fn as_expr(sp: Span, e: Expr_) -> @Expr {
-        @Expr {
-            id: DUMMY_NODE_ID,
-            node: e,
-            span: sp,
-        }
-    }
-
-    fn parse_one_str_lit(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<~str> {
-        let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
-                                                    Vec::from_slice(tts));
-        let entry = parser.parse_expr();
-
-        let lit = match entry.node {
-            ExprLit(lit) => {
-                match lit.node {
-                    LitStr(ref s, _) => s.clone(),
-                    _ => {
-                        cx.span_err(entry.span, "expected string literal");
-                        return None
-                    }
-                }
-            }
-            _ => {
-                cx.span_err(entry.span, "expected string literal");
-                return None
-            }
-        };
-        if !parser.eat(&EOF) {
-            cx.span_err(parser.span, "only one string literal allowed");
-            return None;
-        }
-        Some(lit.to_str().to_owned())
-    }
-
-    pub fn make_regexp(orig: &str, insts: Vec<Inst>, names: Vec<Option<~str>>,
-                   prefix: Vec<char>) -> Regexp {
-        Regexp {
-            orig: orig.to_owned(),
-            comp: Program {
-                insts: insts,
-                names: names,
-                prefix: prefix,
-            },
-        }
-    }
 }

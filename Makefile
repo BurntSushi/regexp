@@ -1,15 +1,23 @@
 RUSTC ?= rustc
 RUSTDOC ?= rustdoc
-RUST_PATH ?= $(HOME)/.rust/lib/x86_64-unknown-linux-gnu
+RUST_PATH ?= ./build/
 RUSTFLAGS ?= --opt-level=3
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
 SRC_FILES = src/lib.rs src/parse.rs src/compile.rs src/vm.rs \
-						src/unicode.rs src/regexp.rs \
-						src/test/mod.rs src/test/test.rs src/test/quick.rs \
-						src/test/matches.rs src/test/bench.rs
+						src/unicode.rs src/regexp.rs src/macro.rs \
+						src/test/mod.rs src/test/test.rs \
+						src/test/matches.rs src/test/bench.rs \
+						src/test/macro.rs
 
 compile:
-	$(RUSTC) $(RUSTFLAGS) ./src/lib.rs --out-dir=./build
+	make regexp
+	make regexp-re
+
+regexp:
+	$(RUSTC) -L $(RUST_PATH) $(RUSTFLAGS) ./src/lib.rs --out-dir=./build
+
+regexp-re:
+	$(RUSTC) -L $(RUST_PATH) $(RUSTFLAGS) ./src/macro.rs --out-dir=./build
 
 macros: macros.rs
 	$(RUSTC) -L $(RUST_PATH) macros.rs -o macros
@@ -35,28 +43,17 @@ docs: $(SRCFILES)
 	in-dir doc fix-perms
 	rscp ./doc/* gopher:~/www/burntsushi.net/rustdoc/
 
-alltests:
-	make test
-	make largetest
-	make quicktest
-
-test: build/tests
+test: build/tests test-re
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests
 
 build/tests: $(SRC_FILES)
 	rustc $(RUSTTESTFLAGS) --test src/lib.rs -o ./build/tests
 
-largetest: build/largetests
-	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/largetests
+test-re: build/tests-re
+	RUST_TEST_TASKS=1 RUST_LOG=regexp,regex_re_test ./build/tests-re
 
-build/largetests: $(SRC_FILES)
-	rustc $(RUSTTESTFLAGS) --test --cfg large src/lib.rs -o ./build/largetests
-
-quicktest: build/quicktests
-	RUST_TEST_TASKS=1 RUST_LOG=quickcheck,regexp ./build/quicktests
-
-build/quicktests: $(SRC_FILES)
-	rustc $(RUSTTESTFLAGS) --test --cfg quickcheck src/lib.rs -o ./build/quicktests
+build/tests-re: $(SRC_FILES)
+	rustc $(RUSTTESTFLAGS) --test src/test/macro.rs -o ./build/tests-re
 
 debug: build/debug
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/debug

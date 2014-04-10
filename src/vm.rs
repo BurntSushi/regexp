@@ -22,7 +22,8 @@
 // AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
 
 use std::mem;
-use super::compile::{Program, Char_, CharClass, Any_,
+use super::compile::{Program,
+                     Char_, CharClass, Any_,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
@@ -36,7 +37,8 @@ pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 /// Note that if 'caps' is false, the capture indices returned will always be
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
-pub fn run(prog: &Program, input: &[char], caps: bool) -> CaptureIndices {
+pub fn run<'i, 'p, P: Program<'p>>(prog: &'p P, input: &'i [char], caps: bool)
+                                   -> CaptureIndices {
     unflatten_capture_locations(Vm {
         prog: prog,
         input: input,
@@ -128,17 +130,17 @@ impl Threads {
     }
 }
 
-struct Vm<'r> {
-    prog: &'r Program,
-    input: &'r [char],
+struct Vm<'i, 'p, P> {
+    prog: &'p P,
+    input: &'i [char],
     caps: bool,
 }
 
-impl<'r> Vm<'r> {
+impl<'i, 'p, P: Program<'p>> Vm<'i, 'p, P> {
     fn run(&self) -> Vec<Option<uint>> {
         let num_caps = self.prog.num_captures();
-        let mut clist = Threads::new(self.prog.insts.len(), num_caps);
-        let mut nlist = Threads::new(self.prog.insts.len(), num_caps);
+        let mut clist = Threads::new(self.prog.insts().len(), num_caps);
+        let mut nlist = Threads::new(self.prog.insts().len(), num_caps);
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
@@ -159,8 +161,8 @@ impl<'r> Vm<'r> {
                 // BUT, if there's a literal prefix for the program, try to 
                 // jump ahead quickly. If it can't be found, then we can bail 
                 // out early.
-                if self.prog.prefix.len() > 0 && clist.size == 0 {
-                    let needle = self.prog.prefix.as_slice();
+                if self.prog.prefix().len() > 0 && clist.size == 0 {
+                    let needle = self.prog.prefix();
                     let haystack = self.input.as_slice().slice_from(ic);
                     match find_prefix(needle, haystack) {
                         None => return Vec::from_elem(num_caps * 2, None),
@@ -179,7 +181,7 @@ impl<'r> Vm<'r> {
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match *self.prog.insts.get(pc) {
+                match self.prog.insts()[pc] {
                     Match => {
                         if !self.caps {
                             // This is a terrible hack that is used to
@@ -247,7 +249,7 @@ impl<'r> Vm<'r> {
         //
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
-        match *self.prog.insts.get(pc) {
+        match self.prog.insts()[pc] {
             EmptyBegin(multi) => {
                 nlist.add(pc, groups, true);
                 if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {

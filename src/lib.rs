@@ -6,22 +6,19 @@
 
 //! Regular expressions for Rust.
 
-#![feature(macro_registrar, managed_boxes)]
-#![feature(macro_rules)]
-#![feature(phase)]
-#![feature(quote)]
+#![feature(macro_rules, phase, default_type_params)]
 
 extern crate collections;
 #[phase(syntax, link)]
 extern crate log;
 extern crate rand;
-extern crate syntax;
 
 #[cfg(bench)]
 extern crate stdtest = "test";
 
-#[cfg(quickcheck)]
-extern crate quickcheck;
+#[phase(syntax)]
+#[cfg(test)]
+extern crate regexp_re;
 
 use std::fmt;
 use std::str;
@@ -30,7 +27,6 @@ use parse::is_punct;
 pub use regexp::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use regexp::{FindCaptures, FindMatches};
 pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
-pub use regexp::macro::macro_registrar;
 
 mod compile;
 mod parse;
@@ -86,10 +82,28 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
 }
 
+pub type RegexpStatic = Regexp<&'static program::StaticProgram>;
+
 /// The `program` module exists to support the `re!` macro. Do not use.
 pub mod program {
-    pub use super::compile::Program;
+    use std::str::MaybeOwned;
+    pub use super::compile::{Program, DynamicProgram, StaticProgram};
     pub use super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
     pub use super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
-    pub use super::regexp::macro::make_regexp;
+    pub use super::compile::{MaybeStaticClass, DynamicClass, StaticClass};
+    use super::Regexp;
+
+    /// For the `re!` extension. Do not use.
+    pub fn make_regexp(orig: &str, insts: Vec<Inst>,
+                       names: Vec<Option<MaybeOwned<'static>>>,
+                       prefix: Vec<char>) -> Regexp {
+        Regexp {
+            p: DynamicProgram {
+                regex: orig.to_owned(),
+                insts: insts,
+                names: names,
+                prefix: prefix,
+            },
+        }
+    }
 }

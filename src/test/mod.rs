@@ -3,11 +3,7 @@ use std::str;
 
 #[cfg(bench)]
 mod bench;
-#[cfg(large)]
-mod large;
-#[cfg(quickcheck)]
-mod quick;
-#[cfg(not(bench), not(debug), not(quickcheck), not(large))]
+#[cfg(not(bench), not(debug))]
 mod test;
 
 #[allow(dead_code)]
