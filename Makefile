@@ -11,6 +11,9 @@ SRC_FILES = src/lib.rs src/parse.rs src/compile.rs src/vm.rs \
 compile:
 	$(RUSTC) $(RUSTFLAGS) ./src/lib.rs --out-dir=./build
 
+macros: macros.rs
+	$(RUSTC) -L $(RUST_PATH) macros.rs -o macros
+
 install:
 	cargo-lite install --debug
 
@@ -23,9 +26,7 @@ match-tests:
 unicode-tables:
 	./make-unicode-tables > ./src/unicode.rs
 
-docs: doc/regexp/index.html
-
-doc/regexp/index.html: $(SRCFILES)
+docs: $(SRCFILES)
 	rm -rf doc
 	$(RUSTDOC) -L $(RUST_PATH) --test ./src/lib.rs
 	$(RUSTDOC) -L $(RUST_PATH) ./src/lib.rs

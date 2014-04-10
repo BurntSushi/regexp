@@ -526,10 +526,8 @@ fn char_to_byte_indices(input: &str) -> Vec<uint> {
 }
 
 pub mod macro {
-    #![allow(unused_imports)]
-
     use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
-    use syntax::ast::{Ident, Expr, Expr_, ExprLit, LitStr, ExprVec, ExprMac};
+    use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
     use syntax::codemap::{Span, DUMMY_SP};
     use syntax::ext::base::{SyntaxExtension,
                             ExtCtxt,
@@ -542,7 +540,7 @@ pub mod macro {
     use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 
     use super::Regexp;
-    use super::super::compile::{Program, Inst};
+    use super::super::compile::Program;
     use super::super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
     use super::super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
 
@@ -572,13 +570,13 @@ pub mod macro {
         let insts = as_expr_vec(cx, sp, re.comp.insts.as_slice(),
                                 inst_to_expr);
         let names = as_expr_vec(cx, sp, re.comp.names.as_slice(),
-            |cx, sp, name| match name {
+            |cx, _, name| match name {
                 &Some(ref name) => quote_expr!(cx, Some($name.to_owned())),
                 &None => quote_expr!(cx, None),
             }
         );
         let prefix = as_expr_vec(cx, sp, re.comp.prefix.as_slice(),
-            |cx, sp, &c| quote_expr!(cx, c));
+            |cx, _, &c| quote_expr!(cx, $c));
         MRExpr(quote_expr!(&*cx,
             regexp::program::make_regexp($restr, $insts, $names, $prefix)
         ))
@@ -589,13 +587,13 @@ pub mod macro {
     }
 
     impl ToTokens for char {
-        fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree> {
+        fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
             vec!(TTTok(DUMMY_SP, LIT_CHAR((*self) as u32)))
         }
     }
 
     impl ToTokens for bool {
-        fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree> {
+        fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
             vec!(TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
         }
     }
@@ -607,7 +605,7 @@ pub mod macro {
                 quote_expr!(&*cx, regexp::program::Char_($c, $casei)),
             &CharClass(ref ranges, negated, casei) => {
                 let ranges = as_expr_vec(cx, sp, ranges.as_slice(),
-                    |cx, sp, &(x, y)| quote_expr!(&*cx, ($x, $y)));
+                    |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
                 quote_expr!(
                     &*cx, regexp::program::CharClass($ranges, $negated, $casei))
             }
