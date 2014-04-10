@@ -201,7 +201,7 @@ impl<'r> Replacer for &'r str {
     }
 }
 
-impl<'r> Replacer for 'r |&Captures| -> ~str {
+impl<'r> Replacer for |&Captures|: 'r -> ~str {
     fn reg_replace(&self, caps: &Captures) -> ~str {
         (*self)(caps)
     }
