@@ -9,6 +9,11 @@ use super::vm::CapturePairs;
 
 /// Regexp is a compiled regular expression.
 pub struct Regexp {
+    /// The representation of `Regexp` is exported to support the `re!`
+    /// syntax extension. Do not rely on it.
+    ///
+    /// See the comments for the `program` module in `lib.rs` for a more
+    /// detailed explanation for what `re!` requires.
     #[doc(hidden)]
     pub p: Program,
 }
@@ -23,27 +28,20 @@ impl Regexp {
 }
 
 impl Regexp {
-    /// Executes the VM on the string given and converts the positions
-    /// returned from Unicode character indices to byte indices.
-    fn run(&self, text: &str) -> CapturePairs {
-        let search = SearchText::from_str(text, true);
-        search.exec(self)
-    }
-
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
-        self.has_match(&SearchText::from_str(text, false).exec(self))
-    }
-
-    fn has_match(&self, caps: &CapturePairs) -> bool {
-        caps.len() > 0 && caps.get(0).is_some()
+        has_match(&SearchText::from_str(text, false).exec(self))
     }
 
     /// Returns the start and end byte range of the leftmost-longest match in 
     /// `text`. If no match exists, then `None` is returned.
+    ///
+    /// Note that this should only be used if you want to discover the position
+    /// of the match. Testing the existence of a match is faster if you use
+    /// `is_match`.
     pub fn find(&self, text: &str) -> Option<(uint, uint)> {
-        // println!("INSTS: {}", self.p.insts()); 
-        *self.run(text).get(0)
+        let search = SearchText::from_str(text, true);
+        *search.exec(self).get(0)
     }
 
     /// Iterates through each successive non-overlapping match in `text`,
@@ -276,7 +274,7 @@ pub struct Captures<'t> {
 impl<'t> Captures<'t> {
     fn new(re: &Regexp, search: &SearchText<'t>,
            locs: CapturePairs) -> Option<Captures<'t>> {
-        if !re.has_match(&locs) {
+        if !has_match(&locs) {
             return None
         }
 
@@ -406,7 +404,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
                                               self.last_end,
                                               self.search.chars.len());
         let (us, ue) =
-            if !self.re.has_match(&uni_caps) {
+            if !has_match(&uni_caps) {
                 return None
             } else {
                 uni_caps.get(0).unwrap()
@@ -451,7 +449,7 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
                                               self.last_end,
                                               self.search.chars.len());
         let (us, ue) =
-            if !self.re.has_match(&uni_caps) {
+            if !has_match(&uni_caps) {
                 return None
             } else {
                 uni_caps.get(0).unwrap()
@@ -521,4 +519,8 @@ fn char_to_byte_indices(input: &str) -> Vec<uint> {
     // Push one more for the length.
     bytei.push(input.len());
     bytei
+}
+
+fn has_match(caps: &CapturePairs) -> bool {
+    caps.len() > 0 && caps.get(0).is_some()
 }

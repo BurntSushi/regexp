@@ -11,22 +11,14 @@ mod unicode;
 
 static MAX_REPEAT: uint = 1000;
 
-/// Error corresponds to something that can go wrong while parsing or compiling
+/// Error corresponds to something that can go wrong while parsing
 /// a regular expression.
 ///
 /// (Once an expression is compiled, it is not possible to produce an error
 /// via searching, splitting or replacing.)
 pub struct Error {
     pub pos: uint,
-    pub kind: ErrorKind,
     pub msg: ~str,
-}
-
-/// Describes the type of the error returned.
-#[deriving(Show)]
-pub enum ErrorKind {
-    Bug,
-    BadSyntax,
 }
 
 #[deriving(Show, Clone)]
@@ -45,22 +37,6 @@ pub enum Ast {
     Alt(~Ast, ~Ast),
     Rep(~Ast, Repeater, Greed),
 }
-
-// impl Ast { 
-    // pub fn literal_prefix(&self) -> ~str { 
-        // fn prefix(pre: ~str, ast: &Ast) -> ~str { 
-            // match ast { 
-                // &Cat(ref xs) => { 
-//  
-                // } 
-                // _ => break, 
-            // } 
-        // } 
-        // let mut pre = str::with_capacity(5); 
-        // let mut ast = self; 
-        // prefix(pre, ast) 
-    // } 
-// } 
 
 #[deriving(Show, Eq, Clone)]
 pub enum Repeater {
@@ -162,11 +138,7 @@ impl BuildAst {
     fn unwrap(self) -> Result<~Ast, Error> {
         match self {
             Ast(x) => Ok(x),
-            _ => Err(Error {
-                pos: 0,
-                kind: Bug,
-                msg: ~"Tried to unwrap non-AST item.",
-            })
+            _ => fail!("Tried to unwrap non-AST item: {}", self),
         }
     }
 }
@@ -321,7 +293,7 @@ impl<'a> Parser<'a> {
         // Try to improve error handling. At this point, there should be
         // no remaining open parens.
         if self.stack.iter().any(|x| x.paren()) {
-            return self.err(BadSyntax, "Unclosed parenthesis.")
+            return self.err("Unclosed parenthesis.")
         }
         let catfrom = try!(self.pos_last(true, |x| x.bar()));
         try!(self.concat(catfrom));
@@ -350,24 +322,24 @@ impl<'a> Parser<'a> {
 
     fn push_repeater(&mut self, c: char) -> Result<(), Error> {
         if self.stack.len() == 0 {
-            return self.synerr(
+            return self.err(
                 "A repeat operator must be preceded by a valid expression.")
         }
         let rep: Repeater = match from_char(c) {
-            None => return self.err(Bug, "Not a valid repeater operator."),
+            None => fail!("Not a valid repeater operator."),
             Some(r) => r,
         };
 
         match self.peek(1) {
             Some('*') | Some('+') =>
-                return self.synerr(
+                return self.err(
                     "Double repeat operators are not supported."),
             _ => {},
         }
         let ast = try!(self.pop_ast());
         match ast {
             ~Begin(_) | ~End(_) | ~WordBoundary(_) =>
-                return self.synerr(
+                return self.err(
                     "Repeat arguments cannot be empty width assertions."),
             _ => {}
         }
@@ -426,8 +398,8 @@ impl<'a> Parser<'a> {
                             self.next_char();
                             continue
                         }
-                        Some(ast) => return self.err(Bug, format!(
-                            "Expected Class AST but got '{}'", ast)),
+                        Some(ast) =>
+                            fail!("Expected Class AST but got '{}'", ast),
                         // Just drop down and try to add as a regular character.
                         None => {},
                     },
@@ -440,11 +412,10 @@ impl<'a> Parser<'a> {
                         }
                         ~Literal(c2, _) => c = c2, // process below
                         ~Begin(_) | ~End(_) | ~WordBoundary(_) =>
-                            return self.synerr(
+                            return self.err(
                                 "\\A, \\z, \\b and \\B are not valid escape \
                                  sequences inside a character class."),
-                        ast => return self.err(Bug, format!(
-                            "Unexpected AST item '{}'", ast)),
+                        ast => fail!("Unexpected AST item '{}'", ast),
                     }
                 }
                 _ => {},
@@ -472,12 +443,12 @@ impl<'a> Parser<'a> {
                     if self.peek_is(1, '-') && !self.peek_is(2, ']') {
                         self.next_char(); self.next_char();
                         if self.chari >= self.chars.len() {
-                            return self.synerr(
+                            return self.err(
                                 "Expected a closing ']' for a character class.")
                         }
                         let c2 = self.cur();
                         if c2 < c {
-                            return self.synerr(format!(
+                            return self.err(format!(
                                 "Invalid character class range '{}-{}'", c, c2))
                         }
                         ranges.push((c, self.cur()))
@@ -488,7 +459,7 @@ impl<'a> Parser<'a> {
             }
             self.next_char()
         }
-        self.synerr(format!(
+        self.err(format!(
             "Could not find closing ']' for character class starting \
              as position {}.", start))
     }
@@ -535,7 +506,7 @@ impl<'a> Parser<'a> {
         let closer =
             match self.pos('}') {
                 Some(i) => i,
-                None => return self.synerr(format!(
+                None => return self.err(format!(
                     "No closing brace for counted repetition starting at \
                      position {}.", start)),
             };
@@ -553,7 +524,7 @@ impl<'a> Parser<'a> {
             let pieces: Vec<&str> = inner.splitn(',', 1).collect();
             let (smin, smax) = (*pieces.get(0), *pieces.get(1));
             if smin.len() == 0 {
-                return self.synerr("Max repetitions cannot be specified \
+                return self.err("Max repetitions cannot be specified \
                                     without min repetitions.")
             }
             min = try!(self.parse_uint(smin));
@@ -567,19 +538,19 @@ impl<'a> Parser<'a> {
 
         // Do some bounds checking and make sure max >= min.
         if min > MAX_REPEAT {
-            return self.synerr(format!(
+            return self.err(format!(
                 "{} exceeds maximum allowed repetitions ({})",
                 min, MAX_REPEAT));
         }
         if max.is_some() {
             let m = max.unwrap();
             if m > MAX_REPEAT {
-                return self.synerr(format!(
+                return self.err(format!(
                     "{} exceeds maximum allowed repetitions ({})",
                     m, MAX_REPEAT));
             }
             if m < min {
-                return self.synerr(format!(
+                return self.err(format!(
                     "Max repetitions ({}) cannot be smaller than min \
                      repetitions ({}).", m, min));
             }
@@ -620,7 +591,7 @@ impl<'a> Parser<'a> {
     fn parse_escape(&mut self) -> Result<~Ast, Error> {
         self.next_char();
         if self.chari >= self.chars.len() {
-            return self.synerr("Incomplete escape sequence.")
+            return self.err("Incomplete escape sequence.")
         }
 
         let c = self.cur();
@@ -644,8 +615,7 @@ impl<'a> Parser<'a> {
             'd' | 'D' | 's' | 'S' | 'w' | 'W' => {
                 let name = str::from_char(c.to_lowercase());
                 match find_class(PERL_CLASSES, name) {
-                    None => return self.err(Bug, format!(
-                        "Could not find Perl class '{}'", c)),
+                    None => fail!("Could not find Perl class '{}'", c),
                     Some(ranges) => {
                         let negated = c.is_uppercase();
                         let casei = self.flags.is_set(CaseI);
@@ -653,7 +623,7 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            _ => self.synerr(format!("Invalid escape sequence '\\\\{}'", c)),
+            _ => self.err(format!("Invalid escape sequence '\\\\{}'", c)),
         }
     }
 
@@ -669,24 +639,24 @@ impl<'a> Parser<'a> {
             let closer =
                 match self.pos('}') {
                     Some(i) => i,
-                    None => return self.synerr(format!(
+                    None => return self.err(format!(
                         "Missing '\\}' for unclosed '\\{' at position {}",
                         self.chari)),
                 };
             if closer - self.chari + 1 == 0 {
-                return self.synerr("No Unicode class name found.")
+                return self.err("No Unicode class name found.")
             }
             name = self.slice(self.chari + 1, closer);
             self.chari = closer;
         } else {
             if self.chari + 1 >= self.chars.len() {
-                return self.synerr("No single letter Unicode class name found.")
+                return self.err("No single letter Unicode class name found.")
             }
             name = self.slice(self.chari + 1, self.chari + 2);
             self.chari += 1;
         }
         match find_class(UNICODE_CLASSES, name) {
-            None => return self.synerr(format!(
+            None => return self.err(format!(
                 "Could not find Unicode class '{}'", name)),
             Some(ranges) => {
                 let casei = self.flags.is_set(CaseI);
@@ -712,7 +682,7 @@ impl<'a> Parser<'a> {
         let s = self.slice(start, end);
         match num::from_str_radix::<u32>(s, 8) {
             Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), false)),
-            None => self.synerr(format!(
+            None => self.err(format!(
                 "Could not parse '{}' as octal number.", s)),
         }
     }
@@ -727,7 +697,7 @@ impl<'a> Parser<'a> {
         let start = self.chari + 2;
         let closer =
             match self.pos('}') {
-                None => return self.synerr(format!(
+                None => return self.err(format!(
                     "Missing '\\}' for unclosed '\\{' at position {}", start)),
                 Some(i) => i,
             };
@@ -740,7 +710,7 @@ impl<'a> Parser<'a> {
     fn parse_hex_two(&mut self) -> Result<~Ast, Error> {
         let (start, end) = (self.chari, self.chari + 2);
         if end > self.chars.len() {
-            return self.synerr(format!(
+            return self.err(format!(
                 "Invalid hex escape sequence '{}'",
                 self.slice(self.chari - 2, self.chars.len())))
         }
@@ -751,7 +721,7 @@ impl<'a> Parser<'a> {
     fn parse_hex_digits(&self, s: &str) -> Result<~Ast, Error> {
         match num::from_str_radix::<u32>(s, 16) {
             Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), false)),
-            None => self.synerr(format!(
+            None => self.err(format!(
                 "Could not parse '{}' as hex number.", s)),
         }
     }
@@ -764,14 +734,14 @@ impl<'a> Parser<'a> {
         let closer =
             match self.pos('>') {
                 Some(i) => i,
-                None => return self.synerr("Capture name must end with '>'."),
+                None => return self.err("Capture name must end with '>'."),
             };
         if closer - self.chari == 0 {
-            return self.synerr("Capture names must have at least 1 character.")
+            return self.err("Capture names must have at least 1 character.")
         }
         let name = self.slice(self.chari, closer);
         if !name.chars().all(is_valid_cap) {
-            return self.synerr(
+            return self.err(
                 "Capture names must can only have underscores, \
                  letters and digits.")
         }
@@ -799,7 +769,7 @@ impl<'a> Parser<'a> {
                 'U' => { flags = flags | SwapGreed; saw_flag = true},
                 '-' => {
                     if sign < 0 {
-                        return self.synerr(format!(
+                        return self.err(format!(
                             "Cannot negate flags twice in '{}'.",
                             self.slice(start, self.chari + 1)))
                     }
@@ -810,7 +780,7 @@ impl<'a> Parser<'a> {
                 ':' | ')' => {
                     if sign < 0 {
                         if !saw_flag {
-                            return self.synerr(format!(
+                            return self.err(format!(
                                 "A valid flag does not follow negation in '{}'",
                                 self.slice(start, self.chari + 1)))
                         }
@@ -823,12 +793,12 @@ impl<'a> Parser<'a> {
                     self.flags = flags;
                     return Ok(())
                 }
-                _ => return self.synerr(format!(
+                _ => return self.err(format!(
                     "Unrecognized flag '{}'.", self.cur())),
             }
             self.next_char();
         }
-        self.synerr(format!(
+        self.err(format!(
             "Invalid flags: '{}'", self.slice(start, self.chari)))
     }
 
@@ -849,7 +819,7 @@ impl<'a> Parser<'a> {
                 if allow_start {
                     self.stack.len()
                 } else {
-                    return self.synerr("No matching opening parenthesis.")
+                    return self.err("No matching opening parenthesis.")
                 }
             }
         };
@@ -881,7 +851,7 @@ impl<'a> Parser<'a> {
     fn build_from(&mut self, from: uint, mk: |~Ast, ~Ast| -> Ast)
                  -> Result<~Ast, Error> {
         if from >= self.stack.len() {
-            return self.synerr("Empty group or alternate not allowed.")
+            return self.err("Empty group or alternate not allowed.")
         }
 
         let mut combined = try!(self.pop_ast());
@@ -899,7 +869,7 @@ impl<'a> Parser<'a> {
     fn parse_uint(&self, s: &str) -> Result<uint, Error> {
         match from_str::<uint>(s) {
             Some(i) => Ok(i),
-            None => self.synerr(format!(
+            None => self.err(format!(
                 "Expected an unsigned integer but got '{}'.", s)),
         }
     }
@@ -907,7 +877,7 @@ impl<'a> Parser<'a> {
     fn char_from_u32(&self, n: u32) -> Result<char, Error> {
         match char::from_u32(n) {
             Some(c) => Ok(c),
-            None => self.synerr(format!(
+            None => self.err(format!(
                 "Could not decode '{}' to unicode character.", n)),
         }
     }
@@ -917,16 +887,11 @@ impl<'a> Parser<'a> {
             .skip(self.chari).position(|&c2| c2 == c).map(|i| self.chari + i)
     }
 
-    fn err<T>(&self, k: ErrorKind, msg: &str) -> Result<T, Error> {
+    fn err<T>(&self, msg: &str) -> Result<T, Error> {
         Err(Error {
             pos: self.chari,
-            kind: k,
             msg: msg.to_owned(),
         })
-    }
-
-    fn synerr<T>(&self, msg: &str) -> Result<T, Error> {
-        self.err(BadSyntax, msg)
     }
 
     fn peek(&self, offset: uint) -> Option<char> {

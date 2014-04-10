@@ -20,7 +20,7 @@ use std::fmt;
 use std::str;
 use parse::is_punct;
 
-pub use parse::{Error, ErrorKind};
+pub use parse::Error;
 pub use regexp::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use regexp::{FindCaptures, FindMatches};
 pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
@@ -35,8 +35,8 @@ mod test;
 
 impl fmt::Show for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f.buf, "{} error near position {}: {}",
-            self.kind, self.pos, self.msg)
+        write!(f.buf, "Regexp syntax error near position {}: {}",
+               self.pos, self.msg)
     }
 }
 
@@ -75,6 +75,9 @@ pub mod program {
     // staticly. Yes, this means a user program will actually construct a
     // program using actual instructions, but it's all hidden behind the `re!`
     // macro. This, AFAIK, is impossible to mitigate.
+    //
+    // For similar reasons, the representation of `Regexp` is also exported
+    // but is hidden in the public API documentation.
     //
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation, which is an acceptable compromise.
