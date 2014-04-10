@@ -38,6 +38,7 @@ docs: $(SRCFILES)
 	rm -rf doc
 	$(RUSTDOC) -L $(RUST_PATH) --test ./src/lib.rs
 	$(RUSTDOC) -L $(RUST_PATH) ./src/lib.rs
+	$(RUSTDOC) -L $(RUST_PATH) ./src/macro.rs
 	# WTF is rustdoc doing?
 	chmod 755 doc
 	in-dir doc fix-perms

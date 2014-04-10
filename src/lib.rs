@@ -16,14 +16,11 @@ extern crate rand;
 #[cfg(bench)]
 extern crate stdtest = "test";
 
-#[phase(syntax)]
-#[cfg(test)]
-extern crate regexp_re;
-
 use std::fmt;
 use std::str;
 use parse::is_punct;
 
+pub use parse::{Error, ErrorKind};
 pub use regexp::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use regexp::{FindCaptures, FindMatches};
 pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
@@ -35,24 +32,6 @@ mod vm;
 
 #[cfg(test)]
 mod test;
-
-/// Error corresponds to something that can go wrong while parsing or compiling
-/// a regular expression.
-///
-/// (Once an expression is compiled, it is not possible to produce an error
-/// via searching, splitting or replacing.)
-pub struct Error {
-    pub pos: uint,
-    pub kind: ErrorKind,
-    pub msg: ~str,
-}
-
-/// Describes the type of the error returned.
-#[deriving(Show)]
-pub enum ErrorKind {
-    Bug,
-    BadSyntax,
-}
 
 impl fmt::Show for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -85,6 +64,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 pub type RegexpStatic = Regexp<&'static program::StaticProgram>;
 
 /// The `program` module exists to support the `re!` macro. Do not use.
+#[doc(hidden)]
 pub mod program {
     use std::str::MaybeOwned;
     pub use super::compile::{Program, DynamicProgram, StaticProgram};

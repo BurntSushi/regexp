@@ -2,15 +2,15 @@ use collections::HashMap;
 use std::from_str::from_str;
 use std::str;
 
-use super::Error;
 use super::compile::{Program, DynamicProgram};
-use super::parse::parse;
+use super::parse::{parse, Error};
 use super::vm;
 use super::vm::CaptureIndices;
 
 /// Regexp is a compiled regular expression.
 #[allow(visible_private_types)]
 pub struct Regexp<P = DynamicProgram> {
+    #[doc(hidden)]
     pub p: P,
 }
 

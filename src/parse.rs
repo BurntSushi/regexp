@@ -5,12 +5,29 @@ use std::iter;
 use std::num;
 use std::str;
 
-use super::{Error, ErrorKind, Bug, BadSyntax};
 use self::unicode::UNICODE_CLASSES;
 
 mod unicode;
 
 static MAX_REPEAT: uint = 1000;
+
+/// Error corresponds to something that can go wrong while parsing or compiling
+/// a regular expression.
+///
+/// (Once an expression is compiled, it is not possible to produce an error
+/// via searching, splitting or replacing.)
+pub struct Error {
+    pub pos: uint,
+    pub kind: ErrorKind,
+    pub msg: ~str,
+}
+
+/// Describes the type of the error returned.
+#[deriving(Show)]
+pub enum ErrorKind {
+    Bug,
+    BadSyntax,
+}
 
 #[deriving(Show, Clone)]
 pub enum Ast {

@@ -1,7 +1,7 @@
 #![crate_id = "regexp_re#0.1.0"]
 #![crate_type = "dylib"]
 #![license = "UNLICENSE"]
-#![doc(html_root_url = "http://burntsushi.net/rustdoc/regexp-re")]
+#![doc(html_root_url = "http://burntsushi.net/rustdoc/regexp_re")]
 
 #![feature(macro_rules, phase, macro_registrar, managed_boxes, quote)]
 
@@ -51,7 +51,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     };
 
     let insts = as_expr_vec_static(cx, sp, re.p.insts(), 
-        |cx, sp, inst| inst_to_expr(cx, sp, inst, true));
+        |cx, sp, inst| inst_to_expr(cx, sp, inst));
     let names = as_expr_vec_static(cx, sp, re.p.names(),
         |cx, _, name| match name {
             &Some(ref name) => {
@@ -75,6 +75,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     ))
 }
 
+#[doc(hidden)]
 trait ToTokens {
     fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
 }
