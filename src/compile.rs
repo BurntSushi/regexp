@@ -35,9 +35,9 @@ pub enum Inst {
     // When a Match instruction is executed, the current thread is successful.
     Match,
 
-    // The Char instruction matches a literal character.
+    // The OneChar instruction matches a literal character.
     // If the bool is true, then the match is done case insensitively.
-    Char_(char, bool),
+    OneChar(char, bool),
 
     // The CharClass instruction tries to match one input character against
     // the range of characters given.
@@ -48,7 +48,7 @@ pub enum Inst {
 
     // Matches any character except new lines.
     // If the bool is true, then new lines are matched.
-    Any_(bool),
+    Any(bool),
 
     // Matches the beginning of the string, consumes no characters.
     // If the bool is true, then it also matches when the preceding character
@@ -103,7 +103,7 @@ impl Program {
         let mut pre = Vec::with_capacity(5);
         for i in iter::range(1, c.insts.len()) {
             match *c.insts.get(i) {
-                Char_(c, false) => pre.push(c),
+                OneChar(c, false) => pre.push(c),
                 _ => break
             }
         }
@@ -139,8 +139,8 @@ impl<'r> Compiler<'r> {
     fn compile(&mut self, ast: ~parse::Ast) {
         match ast {
             ~Nothing => {},
-            ~Literal(c, casei) => self.push(Char_(c, casei)),
-            ~Dot(nl) => self.push(Any_(nl)),
+            ~Literal(c, casei) => self.push(OneChar(c, casei)),
+            ~Dot(nl) => self.push(Any(nl)),
             ~Class(ranges, negated, casei) =>
                 self.push(CharClass(Dynamic(ranges), negated, casei)),
             ~Begin(multi) => self.push(EmptyBegin(multi)),

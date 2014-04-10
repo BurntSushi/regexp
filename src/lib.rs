@@ -65,7 +65,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 #[doc(hidden)]
 pub mod program {
     pub use super::compile::{Program, MaybeStatic};
-    pub use super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
+    pub use super::compile::{Inst, OneChar, CharClass, Any, Save, Jump, Split};
     pub use super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
     pub use super::compile::{Dynamic, Static};
 }

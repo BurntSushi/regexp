@@ -23,7 +23,7 @@ use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 
 use regexp::Regexp;
 use regexp::program::MaybeStatic;
-use regexp::program::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
+use regexp::program::{Inst, OneChar, CharClass, Any, Save, Jump, Split};
 use regexp::program::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
 
 /// For the `re!` syntax extension. Do not use.
@@ -95,12 +95,12 @@ impl ToTokens for bool {
 fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
     match inst {
         &Match => quote_expr!(&*cx, regexp::program::Match),
-        &Char_(c, casei) =>
-            quote_expr!(&*cx, regexp::program::Char_($c, $casei)),
+        &OneChar(c, casei) =>
+            quote_expr!(&*cx, regexp::program::OneChar($c, $casei)),
         &CharClass(ref ranges, negated, casei) => {
             char_class_to_expr(cx, sp, ranges, negated, casei)
         }
-        &Any_(multi) =>
+        &Any(multi) =>
             quote_expr!(&*cx, regexp::program::Any($multi)),
         &EmptyBegin(multi) =>
             quote_expr!(&*cx, regexp::program::EmptyBegin($multi)),

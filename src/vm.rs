@@ -23,7 +23,7 @@
 
 use std::mem;
 use super::compile::{Program,
-                     Char_, CharClass, Any_,
+                     OneChar, CharClass, Any,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
@@ -195,7 +195,7 @@ impl<'r, 't> Nfa<'r, 't> {
                         }
                         clist.empty();
                     }
-                    Char_(c, casei) => {
+                    OneChar(c, casei) => {
                         if self.char_eq(casei, ic, c) {
                             self.add(&mut nlist, pc+1, ic+1, clist.groups(i));
                         }
@@ -211,9 +211,9 @@ impl<'r, 't> Nfa<'r, 't> {
                             }
                         }
                     }
-                    Any_(true) =>
+                    Any(true) =>
                         self.add(&mut nlist, pc+1, ic+1, clist.groups(i)),
-                    Any_(false) => {
+                    Any(false) => {
                         if !self.char_eq(false, ic, '\n') {
                             self.add(&mut nlist, pc+1, ic+1, clist.groups(i))
                         }
@@ -238,7 +238,7 @@ impl<'r, 't> Nfa<'r, 't> {
         // We have to add states to the threads list even if their empty.
         // TL;DR - It prevents cycles.
         // If we didn't care about cycles, we'd *only* add threads that
-        // correspond to non-jumping instructions (Char, Any, Match, etc.).
+        // correspond to non-jumping instructions (OneChar, Any, Match, etc.).
         // But, it's possible for valid regexs (like '(a*)*') to result in
         // a cycle in the instruction list. e.g., We'll keep chasing the Split
         // instructions forever.
@@ -289,8 +289,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, x, ic, groups);
                 self.add(nlist, y, ic, groups);
             }
-            // Handled in 'run'
-            Match | Char_(_, _) | CharClass(_, _, _) | Any_(_) => {
+            Match | OneChar(_, _) | CharClass(_, _, _) | Any(_) => {
                 // If captures are enabled, then we need to indicate that
                 // this isn't an empty state.
                 // Otherwise, we say it's an empty state (even though it isn't)
