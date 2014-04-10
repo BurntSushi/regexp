@@ -27,7 +27,8 @@ use super::compile::{Program,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
-pub type CaptureIndices = Vec<Option<(uint, uint)>>;
+pub type CapturePairs = Vec<Option<(uint, uint)>>;
+pub type CaptureLocs = Vec<Option<uint>>;
 
 /// Runs an NFA simulation on the list of instructions and input given. (The
 /// input must have been decoded into a slice of UTF8 characters.)
@@ -38,7 +39,7 @@ pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
 pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool)
-                  -> CaptureIndices {
+                  -> CapturePairs {
     unflatten_capture_locations(Nfa {
         prog: prog,
         input: input,
@@ -50,7 +51,7 @@ pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool)
 /// sure that the following invariant holds: for a particular capture group
 /// k, the slots 2k and 2k+1 must both contain a location or must both be done
 /// by the time the VM is done executing. (Otherwise there is a bug in the VM.)
-fn unflatten_capture_locations(locs: Vec<Option<uint>>) -> CaptureIndices {
+fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
     let mut caps = Vec::with_capacity(locs.len() / 2);
     for win in locs.as_slice().chunks(2) {
         match (win[0], win[1]) {
@@ -62,74 +63,6 @@ fn unflatten_capture_locations(locs: Vec<Option<uint>>) -> CaptureIndices {
     caps
 }
 
-struct Thread {
-    pc: uint,
-    groups: Vec<Option<uint>>,
-}
-
-impl Thread {
-    fn new(pc: uint, groups: Vec<Option<uint>>) -> Thread {
-        Thread { pc: pc, groups: groups }
-    }
-}
-
-struct Threads {
-    queue: Vec<Thread>,
-    sparse: Vec<uint>,
-    size: uint,
-}
-
-impl Threads {
-    // This is using a wicked neat trick to provide constant time lookup
-    // for threads in the queue using a sparse set. A queue of threads is
-    // allocated once with maximal size when the VM initializes and is reused
-    // throughout execution. That is, there should be zero allocation during
-    // the execution of a VM.
-    //
-    // See http://research.swtch.com/sparse for the deets.
-    fn new(num_insts: uint, num_caps: uint) -> Threads {
-        Threads {
-            queue: Vec::from_fn(num_insts, |_| {
-                Thread::new(0, Vec::from_elem(num_caps * 2, None))
-            }),
-            sparse: Vec::from_elem(num_insts, 0u),
-            size: 0,
-        }
-    }
-
-    fn add(&mut self, pc: uint, groups: &[Option<uint>], empty: bool) {
-        let t = self.queue.get_mut(self.size);
-        t.pc = pc;
-        if !empty {
-            let mut i = 0;
-            while i < groups.len() {
-                *t.groups.get_mut(i) = groups[i];
-                i += 1;
-            }
-        }
-        *self.sparse.get_mut(pc) = self.size;
-        self.size += 1;
-    }
-
-    #[inline(always)]
-    fn contains(&self, pc: uint) -> bool {
-        let s = *self.sparse.get(pc);
-        s < self.size && self.queue.get(s).pc == pc
-    }
-
-    fn empty(&mut self) {
-        self.size = 0;
-    }
-
-    fn pc(&self, i: uint) -> uint {
-        self.queue.get(i).pc
-    }
-
-    fn groups<'r>(&'r mut self, i: uint) -> &'r mut [Option<uint>] {
-        self.queue.get_mut(i).groups.as_mut_slice()
-    }
-}
-
 struct Nfa<'r, 't> {
     prog: &'r Program,
     input: &'t [char],
@@ -137,10 +70,10 @@ struct Nfa<'r, 't> {
 }
 
 impl<'r, 't> Nfa<'r, 't> {
-    fn run(&self) -> Vec<Option<uint>> {
+    fn run(&self) -> CaptureLocs {
         let num_caps = self.prog.num_captures();
-        let mut clist = Threads::new(self.prog.insts.len(), num_caps);
-        let mut nlist = Threads::new(self.prog.insts.len(), num_caps);
+        let clist = &mut Threads::new(self.prog.insts.len(), num_caps);
+        let nlist = &mut Threads::new(self.prog.insts.len(), num_caps);
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
@@ -175,59 +108,74 @@ impl<'r, 't> Nfa<'r, 't> {
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
             if groups.get(0).is_none() {
-                self.add(&mut clist, 0, ic, groups.as_mut_slice())
+                self.add(clist, 0, ic, groups.as_mut_slice())
             }
 
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.prog.insts.as_slice()[pc] {
-                    Match => {
-                        if !self.caps {
-                            // This is a terrible hack that is used to
-                            // indicate a match when the caller doesn't want
-                            // any capture groups.
-                            // We can bail out super early since we don't
-                            // care about matching leftmost-longest.
-                            return vec!(Some(0), Some(0))
-                        } else {
-                            groups = Vec::from_slice(clist.groups(i))
-                        }
+                match self.step(nlist, clist.groups(i), pc, ic) {
+                    (Some(locs), true) => return locs,
+                    (Some(locs), false) => {
+                        groups = locs;
                         clist.empty();
-                    }
-                    OneChar(c, casei) => {
-                        if self.char_eq(casei, ic, c) {
-                            self.add(&mut nlist, pc+1, ic+1, clist.groups(i));
-                        }
-                    }
-                    CharClass(ref ranges, negate, casei) => {
-                        if ic < self.input.len() {
-                            let c = self.get(ic);
-                            let found = ranges.as_slice();
-                            let found = found.bsearch(|&rc| class_cmp(casei, c, rc));
-                            let found = found.is_some();
-                            if (found && !negate) || (!found && negate) {
-                                self.add(&mut nlist, pc+1, ic+1, clist.groups(i));
-                            }
-                        }
-                    }
-                    Any(true) =>
-                        self.add(&mut nlist, pc+1, ic+1, clist.groups(i)),
-                    Any(false) => {
-                        if !self.char_eq(false, ic, '\n') {
-                            self.add(&mut nlist, pc+1, ic+1, clist.groups(i))
-                        }
-                    }
-                    EmptyBegin(_) | EmptyEnd(_) | EmptyWordBoundary(_)
-                    | Save(_) | Jump(_) | Split(_, _) => {},
+                    },
+                    _ => {}
                 }
                 i += 1;
             }
-            mem::swap(&mut clist, &mut nlist);
+            mem::swap(clist, nlist);
             nlist.empty();
             ic += 1;
         }
         groups
+    }
+
+    fn step(&self, nlist: &mut Threads, caps: &mut [Option<uint>],
+            pc: uint, ic: uint)
+           -> (Option<CaptureLocs>, bool) {
+        match self.prog.insts.as_slice()[pc] {
+            Match => {
+                if !self.caps {
+                    // This is a terrible hack that is used to
+                    // indicate a match when the caller doesn't want
+                    // any capture groups.
+                    // We can bail out super early since we don't
+                    // care about matching leftmost-longest.
+                    // return vec!(Some(0), Some(0)) 
+                    return (Some(vec!(Some(0), Some(0))), true)
+                } else {
+                    let caps = Vec::from_slice(caps);
+                    return (Some(caps), false)
+                }
+            }
+            OneChar(c, casei) => {
+                if self.char_eq(casei, ic, c) {
+                    self.add(nlist, pc+1, ic+1, caps);
+                }
+            }
+            CharClass(ref ranges, negate, casei) => {
+                if ic < self.input.len() {
+                    let c = self.get(ic);
+                    let found = ranges.as_slice();
+                    let found = found.bsearch(|&rc| class_cmp(casei, c, rc));
+                    let found = found.is_some();
+                    if (found && !negate) || (!found && negate) {
+                        self.add(nlist, pc+1, ic+1, caps);
+                    }
+                }
+            }
+            Any(true) =>
+                self.add(nlist, pc+1, ic+1, caps),
+            Any(false) => {
+                if !self.char_eq(false, ic, '\n') {
+                    self.add(nlist, pc+1, ic+1, caps)
+                }
+            }
+            EmptyBegin(_) | EmptyEnd(_) | EmptyWordBoundary(_)
+            | Save(_) | Jump(_) | Split(_, _) => {},
+        }
+        (None, false)
     }
 
     fn add(&self, nlist: &mut Threads, pc: uint, ic: uint,
@@ -345,6 +293,81 @@ impl<'r, 't> Nfa<'r, 't> {
     }
 }
 
+struct Thread {
+    pc: uint,
+    groups: CaptureLocs,
+}
+
+impl Thread {
+    fn new(pc: uint, groups: CaptureLocs) -> Thread {
+        Thread { pc: pc, groups: groups }
+    }
+}
+
+struct Threads {
+    queue: Vec<Thread>,
+    sparse: Vec<uint>,
+    size: uint,
+}
+
+impl Threads {
+    // This is using a wicked neat trick to provide constant time lookup
+    // for threads in the queue using a sparse set. A queue of threads is
+    // allocated once with maximal size when the VM initializes and is reused
+    // throughout execution. That is, there should be zero allocation during
+    // the execution of a VM.
+    //
+    // See http://research.swtch.com/sparse for the deets.
+    fn new(num_insts: uint, num_caps: uint) -> Threads {
+        Threads {
+            queue: Vec::from_fn(num_insts, |_| {
+                Thread::new(0, Vec::from_elem(num_caps * 2, None))
+            }),
+            sparse: Vec::from_elem(num_insts, 0u),
+            size: 0,
+        }
+    }
+
+    fn add(&mut self, pc: uint, groups: &[Option<uint>], empty: bool) {
+        let t = self.queue.get_mut(self.size);
+        t.pc = pc;
+        if !empty {
+            let mut i = 0;
+            while i < groups.len() {
+                *t.groups.get_mut(i) = groups[i];
+                i += 1;
+            }
+        }
+        *self.sparse.get_mut(pc) = self.size;
+        self.size += 1;
+    }
+
+    #[inline(always)]
+    fn contains(&self, pc: uint) -> bool {
+        let s = *self.sparse.get(pc);
+        s < self.size && self.queue.get(s).pc == pc
+    }
+
+    fn empty(&mut self) {
+        self.size = 0;
+    }
+
+    fn pc(&self, i: uint) -> uint {
+        self.queue.get(i).pc
+    }
+
+    fn groups<'r>(&'r mut self, i: uint) -> &'r mut [Option<uint>] {
+        self.queue.get_mut(i).groups.as_mut_slice()
+    }
+}
+
+/// Given a character and a single character class range, return an ordering
+/// indicating whether the character is less than the start of the range,
+/// in the range (inclusive) or greater than the end of the range.
+///
+/// If `casei` is `true`, then this ordering is computed case insensitively.
+///
+/// This function is meant to be used with a binary search.
 fn class_cmp(casei: bool, mut textc: char,
              (mut start, mut end): (char, char)) -> Ordering {
     if casei {
@@ -368,6 +391,10 @@ fn class_cmp(casei: bool, mut textc: char,
     }
 }
 
+/// Returns the starting location of `needle` in `haystack`.
+/// If `needle` is not in `haystack`, then `None` is returned.
+///
+/// Note that this is using a naive substring algorithm.
 fn find_prefix(needle: &[char], haystack: &[char]) -> Option<uint> {
     if needle.len() > haystack.len() || needle.len() == 0 {
         return None

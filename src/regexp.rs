@@ -5,7 +5,7 @@ use std::str;
 use super::compile::Program;
 use super::parse::{parse, Error};
 use super::vm;
-use super::vm::CaptureIndices;
+use super::vm::CapturePairs;
 
 /// Regexp is a compiled regular expression.
 pub struct Regexp {
@@ -25,7 +25,7 @@ impl Regexp {
 impl Regexp {
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
-    fn run(&self, text: &str) -> CaptureIndices {
+    fn run(&self, text: &str) -> CapturePairs {
         let search = SearchText::from_str(text, true);
         search.exec(self)
     }
@@ -35,7 +35,7 @@ impl Regexp {
         self.has_match(&SearchText::from_str(text, false).exec(self))
     }
 
-    fn has_match(&self, caps: &CaptureIndices) -> bool {
+    fn has_match(&self, caps: &CapturePairs) -> bool {
         caps.len() > 0 && caps.get(0).is_some()
     }
 
@@ -268,14 +268,14 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 /// must be accessed with the `at` method.)
 pub struct Captures<'t> {
     text: &'t str,
-    locs: CaptureIndices,
+    locs: CapturePairs,
     named: HashMap<~str, uint>,
     offset: uint,
 }
 
 impl<'t> Captures<'t> {
     fn new(re: &Regexp, search: &SearchText<'t>,
-           locs: CaptureIndices) -> Option<Captures<'t>> {
+           locs: CapturePairs) -> Option<Captures<'t>> {
         if !re.has_match(&locs) {
             return None
         }
@@ -487,12 +487,12 @@ impl<'t> SearchText<'t> {
         SearchText { text: input, chars: chars, bytei: bytei, caps: caps }
     }
 
-    fn exec(&self, re: &Regexp) -> CaptureIndices {
+    fn exec(&self, re: &Regexp) -> CapturePairs {
         let caps = vm::run(&re.p, self.chars.as_slice(), self.caps);
         cap_to_byte_indices(caps, self.bytei.as_slice())
     }
 
-    fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CaptureIndices {
+    fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CapturePairs {
         let chars = self.chars.as_slice().slice(us, ue);
         let caps = vm::run(&re.p, chars, self.caps);
         caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
@@ -505,8 +505,8 @@ impl<'t> Container for SearchText<'t> {
     }
 }
 
-fn cap_to_byte_indices(mut cis: CaptureIndices, bis: &[uint])
-                      -> CaptureIndices {
+fn cap_to_byte_indices(mut cis: CapturePairs, bis: &[uint])
+                      -> CapturePairs {
     for v in cis.mut_iter() {
         *v = v.map(|(s, e)| (bis[s], bis[e]))
     }
