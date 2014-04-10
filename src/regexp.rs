@@ -7,7 +7,42 @@ use super::parse::{parse, Error};
 use super::vm;
 use super::vm::CapturePairs;
 
-/// Regexp is a compiled regular expression.
+/// Regexp is a compiled regular expression. It can be used to search, split
+/// or replace text.
+///
+/// # Examples
+///
+/// Find the location of a phone number:
+///
+/// ```rust
+/// # use regexp::Regexp;
+/// let re = match Regexp::new("[0-9]{3}-[0-9]{3}-[0-9]{4}") {
+///     Ok(re) => re,
+///     Err(err) => fail!("{}", err),
+/// };
+/// assert_eq!(re.find("phone: 111-222-3333"), Some((7, 19)));
+/// ```
+///
+/// You can also use the `re!` macro to compile a regular expression when
+/// you compile your program. That is, an incorrect expression will cause
+/// the Rust compiler to produce a compile time error.
+///
+/// ```rust
+/// #![feature(phase)]
+/// extern crate regexp;
+/// #[phase(syntax)] extern crate regexp_re;
+///
+/// static global: regexp::Regexp = re!(r"\d+");
+///
+/// fn main() {
+///     static local: regexp::Regexp = re!(r"\d+");
+///     assert_eq!(global.find("123 abc"), Some((0, 3)));
+///     assert_eq!(local.find("123 abc"), Some((0, 3)));
+/// }
+/// ```
+///
+/// More details about the `re!` macro can be found in the `regexp` crate
+/// documentation.
 pub struct Regexp {
     /// The representation of `Regexp` is exported to support the `re!`
     /// syntax extension. Do not rely on it.
@@ -25,9 +60,7 @@ impl Regexp {
         let ast = try!(parse(regex));
         Ok(Regexp { p: Program::new(regex, ast) })
     }
-}
 
-impl Regexp {
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
         has_match(&SearchText::from_str(text, false).exec(self))
@@ -108,6 +141,67 @@ impl Regexp {
     /// `Captures` and returns the replaced string.
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
+    ///
+    /// Note that this function in polymorphic with respect to the replacement.
+    /// In typical usage, this can just be a normal string:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # use regexp::Regexp; fn main() {
+    /// static re: Regexp = re!("[^01]+");
+    /// assert_eq!(re.replace("1078910", ""), ~"1010");
+    /// # }
+    /// ```
+    ///
+    /// But anything satisfying the `Replacer` trait will work. For example,
+    /// a closure of type `|&Captures| -> ~str` provides direct access to the
+    /// captures corresponding to a match. This allows one to access
+    /// submatches easily:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # use regexp::{Regexp, Captures}; fn main() {
+    /// static re: Regexp = re!(r"([^,\s]+),\s+(\S+)");
+    /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
+    ///     format!("{} {}", caps.at(2), caps.at(1))
+    /// });
+    /// assert_eq!(result, ~"Bruce Springsteen");
+    /// # }
+    /// ```
+    ///
+    /// But this is a bit cumbersome to use all the time. Instead, a simple
+    /// syntax is supported that expands `$name` into the corresponding capture
+    /// group. Here's the last example, but using this expansion technique
+    /// with named capture groups:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # use regexp::Regexp; fn main() {
+    /// static re: Regexp = re!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
+    /// let result = re.replace("Springsteen, Bruce", "$first $last");
+    /// assert_eq!(result, ~"Bruce Springsteen");
+    /// # }
+    /// ```
+    ///
+    /// Note that using `$2` instead of `$first` or `$1` instead of `$last`
+    /// would produce the same result. To write a literal `$` use `$$`.
+    ///
+    /// Finally, sometimes you just want to replace a literal string with no
+    /// fancy submatch expansion. This can be done by wraping a string with
+    /// `NoExpand`:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # use regexp::{Regexp, NoExpand}; fn main() {
+    /// static re: Regexp = re!(r"(?P<last>[^,\s]+),\s+(\S+)");
+    /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
+    /// assert_eq!(result, ~"$2 $last");
+    /// # }
+    /// ```
     pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> ~str {
         self.replacen(text, 1, rep)
     }
@@ -115,6 +209,9 @@ impl Regexp {
     /// Replaces all non-overlapping matches in `text` with the 
     /// replacement provided. This is the same as calling `replacen` with
     /// `limit` set to `0`.
+    ///
+    /// See the documentation for `replace` for details on how to access
+    /// submatches in the replacement string.
     pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> ~str {
         self.replacen(text, 0, rep)
     }
@@ -122,6 +219,9 @@ impl Regexp {
     /// Replaces at most `limit` non-overlapping matches in `text` with the 
     /// replacement provided. If `limit` is 0, then all non-overlapping matches
     /// are replaced.
+    ///
+    /// See the documentation for `replace` for details on how to access
+    /// submatches in the replacement string.
     pub fn replacen<R: Replacer>
                    (&self, text: &str, limit: uint, rep: R) -> ~str {
         let mut new = str::with_capacity(text.len());

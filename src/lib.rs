@@ -57,6 +57,9 @@ pub fn quote(text: &str) -> ~str {
 ///
 /// If there was a problem compiling the regular expression, an error is
 /// returned.
+///
+/// To find submatches, split or replace text, you'll need to compile an
+/// expression with `Regexp::new` first.
 pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
 }
