@@ -22,7 +22,7 @@ use syntax::parse::token;
 use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 
 use regexp::Regexp;
-use regexp::program::{Program, MaybeStaticClass};
+use regexp::program::MaybeStatic;
 use regexp::program::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
 use regexp::program::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
 
@@ -50,9 +50,9 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         }
     };
 
-    let insts = as_expr_vec_static(cx, sp, re.p.insts(), 
+    let insts = as_expr_vec_static(cx, sp, re.p.insts.as_slice(), 
         |cx, sp, inst| inst_to_expr(cx, sp, inst));
-    let names = as_expr_vec_static(cx, sp, re.p.names(),
+    let names = as_expr_vec_static(cx, sp, re.p.names.as_slice(),
         |cx, _, name| match name {
             &Some(ref name) => {
                 let name = name.as_slice();
@@ -61,15 +61,15 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
             &None => quote_expr!(cx, None),
         }
     );
-    let prefix = as_expr_vec_static(cx, sp, re.p.prefix(),
+    let prefix = as_expr_vec_static(cx, sp, re.p.prefix.as_slice(),
         |cx, _, &c| quote_expr!(cx, $c));
     MRExpr(quote_expr!(&*cx,
         regexp::Regexp {
-            p: &'static regexp::program::StaticProgram {
-                regex: $restr,
-                insts: $insts,
-                names: $names,
-                prefix: $prefix,
+            p: regexp::program::Program {
+                regex: ::std::str::Slice($restr),
+                insts: regexp::program::Static($insts),
+                names: regexp::program::Static($names),
+                prefix: regexp::program::Static($prefix),
             },
         }
     ))
@@ -118,13 +118,13 @@ fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
 }
 
 fn char_class_to_expr(cx: &mut ExtCtxt, sp: Span,
-                      ranges: &MaybeStaticClass,
+                      ranges: &MaybeStatic<(char, char)>,
                       negated: bool, casei: bool) -> @Expr {
     let ranges = as_expr_vec_static(cx, sp, ranges.as_slice(),
         |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
     quote_expr!(&*cx,
         regexp::program::CharClass(
-            regexp::program::StaticClass($ranges), $negated, $casei))
+            regexp::program::Static($ranges), $negated, $casei))
 }
 
 fn as_expr_vec_static<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],

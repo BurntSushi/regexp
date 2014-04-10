@@ -2,16 +2,15 @@ use collections::HashMap;
 use std::from_str::from_str;
 use std::str;
 
-use super::compile::{Program, DynamicProgram};
+use super::compile::Program;
 use super::parse::{parse, Error};
 use super::vm;
 use super::vm::CaptureIndices;
 
 /// Regexp is a compiled regular expression.
-#[allow(visible_private_types)]
-pub struct Regexp<P = DynamicProgram> {
+pub struct Regexp {
     #[doc(hidden)]
-    pub p: P,
+    pub p: Program,
 }
 
 impl Regexp {
@@ -19,37 +18,37 @@ impl Regexp {
     /// used repeatedly to search, split or replace text in a string.
     pub fn new(regex: &str) -> Result<Regexp, Error> {
         let ast = try!(parse(regex));
-        Ok(Regexp { p: DynamicProgram::new(regex, ast) })
+        Ok(Regexp { p: Program::new(regex, ast) })
     }
 }
 
-impl<'p, P: Program<'p>> Regexp<P> {
+impl Regexp {
     /// Executes the VM on the string given and converts the positions
     /// returned from Unicode character indices to byte indices.
-    fn run(&'p self, text: &str) -> CaptureIndices {
+    fn run(&self, text: &str) -> CaptureIndices {
         let search = SearchText::from_str(text, true);
         search.exec(self)
     }
 
     /// Returns true if and only if the regexp matches the string given.
-    pub fn is_match(&'p self, text: &str) -> bool {
+    pub fn is_match(&self, text: &str) -> bool {
         self.has_match(&SearchText::from_str(text, false).exec(self))
     }
 
-    fn has_match(&'p self, caps: &CaptureIndices) -> bool {
+    fn has_match(&self, caps: &CaptureIndices) -> bool {
         caps.len() > 0 && caps.get(0).is_some()
     }
 
     /// Returns the start and end byte range of the leftmost-longest match in 
     /// `text`. If no match exists, then `None` is returned.
-    pub fn find(&'p self, text: &str) -> Option<(uint, uint)> {
+    pub fn find(&self, text: &str) -> Option<(uint, uint)> {
         // println!("INSTS: {}", self.p.insts()); 
         *self.run(text).get(0)
     }
 
     /// Iterates through each successive non-overlapping match in `text`,
     /// returning the start and end byte indices with respect to `text`.
-    pub fn find_iter<'r>(&'p self, text: &'r str) -> FindMatches<'r, 'p, P> {
+    pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
         FindMatches {
             re: self,
             search: SearchText::from_str(text, true),
@@ -61,7 +60,7 @@ impl<'p, P: Program<'p>> Regexp<P> {
     /// Returns the capture groups corresponding to the leftmost-longest
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
-    pub fn captures<'r>(&'p self, text: &'r str) -> Option<Captures<'r>> {
+    pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         let search = SearchText::from_str(text, true);
         let caps = search.exec(self);
         Captures::new(self, &search, caps)
@@ -70,7 +69,7 @@ impl<'p, P: Program<'p>> Regexp<P> {
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter` (except it
     /// yields capture groups and not positions).
-    pub fn captures_iter<'r>(&'p self, text: &'r str) -> FindCaptures<'r, 'p, P> {
+    pub fn captures_iter<'r, 't>(&'r self, text: &'t str) -> FindCaptures<'r, 't> {
         FindCaptures {
             re: self,
             search: SearchText::from_str(text, true),
@@ -83,7 +82,7 @@ impl<'p, P: Program<'p>> Regexp<P> {
     /// of the regular expression.
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
-    pub fn split<'r>(&'p self, text: &'r str) -> RegexpSplits<'r, 'p, P> {
+    pub fn split<'r, 't>(&'r self, text: &'t str) -> RegexpSplits<'r, 't> {
         RegexpSplits {
             finder: self.find_iter(text),
             text: text,
@@ -96,8 +95,8 @@ impl<'p, P: Program<'p>> Regexp<P> {
     /// substrings.)
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
-    pub fn splitn<'r>(&'p self, text: &'r str, limit: uint)
-                         -> RegexpSplitsN<'r, 'p, P> {
+    pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: uint)
+                         -> RegexpSplitsN<'r, 't> {
         RegexpSplitsN {
             splits: self.split(text),
             cur: 0,
@@ -111,14 +110,14 @@ impl<'p, P: Program<'p>> Regexp<P> {
     /// `Captures` and returns the replaced string.
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
-    pub fn replace<R: Replacer>(&'p self, text: &str, rep: R) -> ~str {
+    pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> ~str {
         self.replacen(text, 1, rep)
     }
 
     /// Replaces all non-overlapping matches in `text` with the 
     /// replacement provided. This is the same as calling `replacen` with
     /// `limit` set to `0`.
-    pub fn replace_all<R: Replacer>(&'p self, text: &str, rep: R) -> ~str {
+    pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> ~str {
         self.replacen(text, 0, rep)
     }
 
@@ -126,7 +125,7 @@ impl<'p, P: Program<'p>> Regexp<P> {
     /// replacement provided. If `limit` is 0, then all non-overlapping matches
     /// are replaced.
     pub fn replacen<R: Replacer>
-                   (&'p self, text: &str, limit: uint, rep: R) -> ~str {
+                   (&self, text: &str, limit: uint, rep: R) -> ~str {
         let mut new = str::with_capacity(text.len());
         let mut last_match = 0u;
         let mut i = 0;
@@ -208,14 +207,14 @@ impl<'r> Replacer for |&Captures|: 'r -> ~str {
 }
 
 /// Yields all substrings delimited by a regular expression match.
-pub struct RegexpSplits<'r, 'p, P> {
-    finder: FindMatches<'r, 'p, P>,
-    text: &'r str,
+pub struct RegexpSplits<'r, 't> {
+    finder: FindMatches<'r, 't>,
+    text: &'t str,
     last: uint,
 }
 
-impl<'r, 'p, P: Program<'p>> Iterator<&'r str> for RegexpSplits<'r, 'p, P> {
-    fn next(&mut self) -> Option<&'r str> {
+impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
+    fn next(&mut self) -> Option<&'t str> {
         match self.finder.next() {
             None => {
                 if self.last >= self.text.len() {
@@ -238,14 +237,14 @@ impl<'r, 'p, P: Program<'p>> Iterator<&'r str> for RegexpSplits<'r, 'p, P> {
 /// Yields at most `N` substrings delimited by a regular expression match.
 ///
 /// The last substring will be whatever remains after splitting.
-pub struct RegexpSplitsN<'r, 'p, P> {
-    splits: RegexpSplits<'r, 'p, P>,
+pub struct RegexpSplitsN<'r, 't> {
+    splits: RegexpSplits<'r, 't>,
     cur: uint,
     limit: uint,
 }
 
-impl<'r, 'p, P: Program<'p>> Iterator<&'r str> for RegexpSplitsN<'r, 'p, P> {
-    fn next(&mut self) -> Option<&'r str> {
+impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
+    fn next(&mut self) -> Option<&'t str> {
         if self.cur >= self.limit {
             None
         } else {
@@ -267,23 +266,22 @@ impl<'r, 'p, P: Program<'p>> Iterator<&'r str> for RegexpSplitsN<'r, 'p, P> {
 /// If a capture group is named, then the matched string is *also* available
 /// via the `name` method. (Note that the 0th capture is always unnamed and so
 /// must be accessed with the `at` method.)
-pub struct Captures<'r> {
-    text: &'r str,
+pub struct Captures<'t> {
+    text: &'t str,
     locs: CaptureIndices,
     named: HashMap<~str, uint>,
     offset: uint,
 }
 
-impl<'r> Captures<'r> {
-    fn new<'r, 'p, P: Program<'p>>
-          (re: &'p Regexp<P>, search: &SearchText<'r>,
-           locs: CaptureIndices) -> Option<Captures<'r>> {
+impl<'t> Captures<'t> {
+    fn new(re: &Regexp, search: &SearchText<'t>,
+           locs: CaptureIndices) -> Option<Captures<'t>> {
         if !re.has_match(&locs) {
             return None
         }
 
         let mut named = HashMap::new();
-        for (i, name) in re.p.names().iter().enumerate() {
+        for (i, name) in re.p.names.as_slice().iter().enumerate() {
             match name {
                 &None => {},
                 &Some(ref name) => {
@@ -312,7 +310,7 @@ impl<'r> Captures<'r> {
 
     /// Returns the matched string for the capture group `i`.
     /// If `i` isn't a valid capture group, then the empty string is returned.
-    pub fn at(&self, i: uint) -> &'r str {
+    pub fn at(&self, i: uint) -> &'t str {
         match self.pos(i) {
             None => "",
             Some((s, e)) => {
@@ -324,7 +322,7 @@ impl<'r> Captures<'r> {
     /// Returns the matched string for the capture group named `name`.
     /// If `name` isn't a valid capture group, then the empty string is 
     /// returned.
-    pub fn name(&self, name: &str) -> &'r str {
+    pub fn name(&self, name: &str) -> &'t str {
         match self.named.find(&name.to_owned()) {
             None => "",
             Some(i) => self.at(*i),
@@ -333,19 +331,19 @@ impl<'r> Captures<'r> {
 
     /// Creates an iterator of all the capture groups in order of appearance
     /// in the regular expression.
-    pub fn iter(&'r self) -> SubCaptures<'r> {
+    pub fn iter(&'t self) -> SubCaptures<'t> {
         SubCaptures { idx: 0, caps: self, }
     }
 
     /// Creates an iterator of all the capture group positions in order of 
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
-    pub fn iter_pos(&'r self) -> SubCapturesPos<'r> {
+    pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
         SubCapturesPos { idx: 0, caps: self, }
     }
 }
 
-impl<'r> Container for Captures<'r> {
+impl<'t> Container for Captures<'t> {
     fn len(&self) -> uint {
         self.locs.len()
     }
@@ -353,13 +351,13 @@ impl<'r> Container for Captures<'r> {
 
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
-pub struct SubCaptures<'r> {
+pub struct SubCaptures<'t> {
     idx: uint,
-    caps: &'r Captures<'r>,
+    caps: &'t Captures<'t>,
 }
 
-impl<'r> Iterator<&'r str> for SubCaptures<'r> {
-    fn next(&mut self) -> Option<&'r str> {
+impl<'t> Iterator<&'t str> for SubCaptures<'t> {
+    fn next(&mut self) -> Option<&'t str> {
         if self.idx < self.caps.len() {
             self.idx += 1;
             Some(self.caps.at(self.idx - 1))
@@ -373,12 +371,12 @@ impl<'r> Iterator<&'r str> for SubCaptures<'r> {
 /// regular expression.
 ///
 /// Positions are byte indices in terms of the original string matched.
-pub struct SubCapturesPos<'r> {
+pub struct SubCapturesPos<'t> {
     idx: uint,
-    caps: &'r Captures<'r>,
+    caps: &'t Captures<'t>,
 }
 
-impl<'r> Iterator<Option<(uint, uint)>> for SubCapturesPos<'r> {
+impl<'t> Iterator<Option<(uint, uint)>> for SubCapturesPos<'t> {
     fn next(&mut self) -> Option<Option<(uint, uint)>> {
         if self.idx < self.caps.len() {
             self.idx += 1;
@@ -391,15 +389,15 @@ impl<'r> Iterator<Option<(uint, uint)>> for SubCapturesPos<'r> {
 
 /// An iterator that yields all non-overlapping capture groups matching a
 /// particular regular expression.
-pub struct FindCaptures<'r, 'p, P> {
-    re: &'p Regexp<P>,
-    search: SearchText<'r>,
+pub struct FindCaptures<'r, 't> {
+    re: &'r Regexp,
+    search: SearchText<'t>,
     last_match: uint,
     last_end: uint,
 }
 
-impl<'r, 'p, P: Program<'p>> Iterator<Captures<'r>> for FindCaptures<'r, 'p, P> {
-    fn next(&mut self) -> Option<Captures<'r>> {
+impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
+    fn next(&mut self) -> Option<Captures<'t>> {
         if self.last_end > self.search.chars.len() {
             return None
         }
@@ -436,14 +434,14 @@ impl<'r, 'p, P: Program<'p>> Iterator<Captures<'r>> for FindCaptures<'r, 'p, P> 
 ///
 /// The iterator yields a tuple of integers corresponding to the start and end
 /// of the match. The indices are byte offsets.
-pub struct FindMatches<'r, 'p, P> {
-    re: &'p Regexp<P>,
-    search: SearchText<'r>,
+pub struct FindMatches<'r, 't> {
+    re: &'r Regexp,
+    search: SearchText<'t>,
     last_match: uint,
     last_end: uint,
 }
 
-impl<'r, 'p, P: Program<'p>> Iterator<(uint, uint)> for FindMatches<'r, 'p, P> {
+impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
     fn next(&mut self) -> Option<(uint, uint)> {
         if self.last_end > self.search.chars.len() {
             return None
@@ -473,8 +471,8 @@ impl<'r, 'p, P: Program<'p>> Iterator<(uint, uint)> for FindMatches<'r, 'p, P> {
     }
 }
 
-struct SearchText<'r> {
-    text: &'r str,
+struct SearchText<'t> {
+    text: &'t str,
     chars: Vec<char>,
     bytei: Vec<uint>,
     caps: bool,
@@ -482,27 +480,26 @@ struct SearchText<'r> {
 
 // TODO: Choose better names. There's some complicated footwork going on here
 // to handle character and byte indices.
-impl<'r> SearchText<'r> {
-    fn from_str(input: &'r str, caps: bool) -> SearchText<'r> {
+impl<'t> SearchText<'t> {
+    fn from_str(input: &'t str, caps: bool) -> SearchText<'t> {
         let chars = input.chars().collect();
         let bytei = char_to_byte_indices(input);
         SearchText { text: input, chars: chars, bytei: bytei, caps: caps }
     }
 
-    fn exec<'p, P: Program<'p>>(&self, re: &'p Regexp<P>) -> CaptureIndices {
+    fn exec(&self, re: &Regexp) -> CaptureIndices {
         let caps = vm::run(&re.p, self.chars.as_slice(), self.caps);
         cap_to_byte_indices(caps, self.bytei.as_slice())
     }
 
-    fn exec_slice<'p, P: Program<'p>>
-                 (&self, re: &'p Regexp<P>, us: uint, ue: uint) -> CaptureIndices {
+    fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CaptureIndices {
         let chars = self.chars.as_slice().slice(us, ue);
         let caps = vm::run(&re.p, chars, self.caps);
         caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
     }
 }
 
-impl<'r> Container for SearchText<'r> {
+impl<'t> Container for SearchText<'t> {
     fn len(&self) -> uint {
         self.text.len()
     }

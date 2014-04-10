@@ -105,7 +105,7 @@ mod matches;
 
 mod large {
     use rand::task_rng;
-    use super::super::super::compile::DynamicProgram;
+    use super::super::super::compile::Program;
     use super::super::super::parse::parse;
     use super::super::super::quote;
     use super::super::gen_regex_str;
@@ -125,6 +125,6 @@ mod large {
         // at 1MB of data.
         let g = &mut task_rng();
         let s = quote(gen_regex_str(g, 100000));
-        let _ = DynamicProgram::new(s, parse(s).unwrap());
+        let _ = Program::new(s, parse(s).unwrap());
     }
 }

@@ -5,7 +5,7 @@
 // because it reuses states previously computed by the machine *and* doesn't
 // keep track of capture groups. The drawback of a DFA (aside from its 
 // complexity) is that it can't accurately return the locations of submatches. 
-// The NFA *can* do that.
+// The NFA *can* do that. (This is my understanding anyway.)
 //
 // Cox suggests that a DFA ought to be used to answer "does this match" and
 // "where does it match" questions. (In the latter, the starting position of
@@ -37,9 +37,9 @@ pub type CaptureIndices = Vec<Option<(uint, uint)>>;
 /// Note that if 'caps' is false, the capture indices returned will always be
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
-pub fn run<'i, 'p, P: Program<'p>>(prog: &'p P, input: &'i [char], caps: bool)
-                                   -> CaptureIndices {
-    unflatten_capture_locations(Vm {
+pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool)
+                  -> CaptureIndices {
+    unflatten_capture_locations(Nfa {
         prog: prog,
         input: input,
         caps: caps,
@@ -130,17 +130,17 @@ impl Threads {
     }
 }
 
-struct Vm<'i, 'p, P> {
-    prog: &'p P,
-    input: &'i [char],
+struct Nfa<'r, 't> {
+    prog: &'r Program,
+    input: &'t [char],
     caps: bool,
 }
 
-impl<'i, 'p, P: Program<'p>> Vm<'i, 'p, P> {
+impl<'r, 't> Nfa<'r, 't> {
     fn run(&self) -> Vec<Option<uint>> {
         let num_caps = self.prog.num_captures();
-        let mut clist = Threads::new(self.prog.insts().len(), num_caps);
-        let mut nlist = Threads::new(self.prog.insts().len(), num_caps);
+        let mut clist = Threads::new(self.prog.insts.len(), num_caps);
+        let mut nlist = Threads::new(self.prog.insts.len(), num_caps);
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
@@ -161,8 +161,8 @@ impl<'i, 'p, P: Program<'p>> Vm<'i, 'p, P> {
                 // BUT, if there's a literal prefix for the program, try to 
                 // jump ahead quickly. If it can't be found, then we can bail 
                 // out early.
-                if self.prog.prefix().len() > 0 && clist.size == 0 {
-                    let needle = self.prog.prefix();
+                if self.prog.prefix.len() > 0 && clist.size == 0 {
+                    let needle = self.prog.prefix.as_slice();
                     let haystack = self.input.as_slice().slice_from(ic);
                     match find_prefix(needle, haystack) {
                         None => return Vec::from_elem(num_caps * 2, None),
@@ -181,7 +181,7 @@ impl<'i, 'p, P: Program<'p>> Vm<'i, 'p, P> {
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.prog.insts()[pc] {
+                match self.prog.insts.as_slice()[pc] {
                     Match => {
                         if !self.caps {
                             // This is a terrible hack that is used to
@@ -249,7 +249,7 @@ impl<'i, 'p, P: Program<'p>> Vm<'i, 'p, P> {
         //
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
-        match self.prog.insts()[pc] {
+        match self.prog.insts.as_slice()[pc] {
             EmptyBegin(multi) => {
                 nlist.add(pc, groups, true);
                 if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {

@@ -6,7 +6,7 @@
 
 //! Regular expressions for Rust.
 
-#![feature(macro_rules, phase, default_type_params)]
+#![feature(macro_rules, phase)]
 
 extern crate collections;
 #[phase(syntax, link)]
@@ -61,29 +61,11 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
 }
 
-pub type RegexpStatic = Regexp<&'static program::StaticProgram>;
-
 /// The `program` module exists to support the `re!` macro. Do not use.
 #[doc(hidden)]
 pub mod program {
-    use std::str::MaybeOwned;
-    pub use super::compile::{Program, DynamicProgram, StaticProgram};
+    pub use super::compile::{Program, MaybeStatic};
     pub use super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
     pub use super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
-    pub use super::compile::{MaybeStaticClass, DynamicClass, StaticClass};
-    use super::Regexp;
-
-    /// For the `re!` extension. Do not use.
-    pub fn make_regexp(orig: &str, insts: Vec<Inst>,
-                       names: Vec<Option<MaybeOwned<'static>>>,
-                       prefix: Vec<char>) -> Regexp {
-        Regexp {
-            p: DynamicProgram {
-                regex: orig.to_owned(),
-                insts: insts,
-                names: names,
-                prefix: prefix,
-            },
-        }
-    }
+    pub use super::compile::{Dynamic, Static};
 }

@@ -12,18 +12,22 @@ use super::parse::{ZeroOne, ZeroMore, OneMore};
 type InstIdx = uint;
 
 #[deriving(Show, Clone)]
-pub enum MaybeStaticClass {
-    DynamicClass(Vec<(char, char)>),
-    StaticClass(&'static [(char, char)]),
+pub enum MaybeStatic<T> {
+    Dynamic(Vec<T>),
+    Static(&'static [T]),
 }
 
-impl Vector<(char, char)> for MaybeStaticClass {
-    fn as_slice<'a>(&'a self) -> &'a [(char, char)] {
+impl<T> Vector<T> for MaybeStatic<T> {
+    fn as_slice<'a>(&'a self) -> &'a [T] {
         match *self {
-            DynamicClass(ref xs) => xs.as_slice(),
-            StaticClass(xs) => xs,
+            Dynamic(ref xs) => xs.as_slice(),
+            Static(xs) => xs,
         }
     }
+}
+
+impl<T> Container for MaybeStatic<T> {
+    fn len(&self) -> uint { self.as_slice().len() }
 }
 
 #[deriving(Show, Clone)]
@@ -40,7 +44,7 @@ pub enum Inst {
     // If the first bool is true, then the character class is negated.
     // If the second bool is true, then the character class is matched
     // case insensitively.
-    CharClass(MaybeStaticClass, bool, bool),
+    CharClass(MaybeStatic<(char, char)>, bool, bool),
 
     // Matches any character except new lines.
     // If the bool is true, then new lines are matched.
@@ -74,55 +78,15 @@ pub enum Inst {
     Split(InstIdx, InstIdx),
 }
 
-pub trait Program<'r> {
-    fn regex(&'r self) -> &'r str;
-    fn insts(&'r self) -> &'r [Inst];
-    fn names(&'r self) -> &'r [Option<MaybeOwned<'r>>];
-    fn prefix(&'r self) -> &'r [char];
-
-    fn num_captures(&'r self) -> uint {
-        let mut n = 0;
-        for inst in self.insts().iter() {
-            match *inst {
-                Save(c) => n = cmp::max(n, c+1),
-                _ => {}
-            }
-        }
-        // There's exactly 2 Save slots for every capture.
-        n / 2
-    }
+pub struct Program {
+    pub regex: MaybeOwned<'static>,
+    pub insts: MaybeStatic<Inst>,
+    pub names: MaybeStatic<Option<MaybeOwned<'static>>>,
+    pub prefix: MaybeStatic<char>,
 }
 
-pub struct StaticProgram {
-    pub regex: &'static str,
-    pub insts: &'static [Inst],
-    pub names: &'static [Option<MaybeOwned<'static>>],
-    pub prefix: &'static [char],
-}
-
-impl Program<'static> for &'static StaticProgram {
-    fn regex(&'static self) -> &'static str { self.regex }
-    fn insts(&'static self) -> &'static [Inst] { self.insts }
-    fn names(&'static self) -> &'static [Option<MaybeOwned<'static>>] { self.names }
-    fn prefix(&'static self) -> &'static [char] { self.prefix }
-}
-
-pub struct DynamicProgram {
-    pub regex: ~str,
-    pub insts: Vec<Inst>,
-    pub names: Vec<Option<MaybeOwned<'static>>>,
-    pub prefix: Vec<char>,
-}
-
-impl<'r> Program<'r> for DynamicProgram {
-    fn regex(&'r self) -> &'r str { self.regex.as_slice() }
-    fn insts(&'r self) -> &'r [Inst] { self.insts.as_slice() }
-    fn names(&'r self) -> &'r [Option<MaybeOwned<'static>>] { self.names.as_slice() }
-    fn prefix(&'r self) -> &'r [char] { self.prefix.as_slice() }
-}
-
-impl DynamicProgram {
-    pub fn new(regex: &str, ast: ~parse::Ast) -> DynamicProgram {
+impl Program {
+    pub fn new(regex: &str, ast: ~parse::Ast) -> Program {
         let mut c = Compiler {
             insts: Vec::with_capacity(100),
             names: Vec::with_capacity(10),
@@ -145,12 +109,24 @@ impl DynamicProgram {
         }
 
         let names = c.names.clone();
-        DynamicProgram {
-            regex: regex.to_owned(),
-            insts: c.insts,
-            names: names,
-            prefix: pre,
+        Program {
+            regex: Owned(regex.to_owned()),
+            insts: Dynamic(c.insts),
+            names: Dynamic(names),
+            prefix: Dynamic(pre),
         }
+    }
+
+    pub fn num_captures(&self) -> uint {
+        let mut n = 0;
+        for inst in self.insts.as_slice().iter() {
+            match *inst {
+                Save(c) => n = cmp::max(n, c+1),
+                _ => {}
+            }
+        }
+        // There's exactly 2 Save slots for every capture.
+        n / 2
     }
 }
 
@@ -166,7 +142,7 @@ impl<'r> Compiler<'r> {
             ~Literal(c, casei) => self.push(Char_(c, casei)),
             ~Dot(nl) => self.push(Any_(nl)),
             ~Class(ranges, negated, casei) =>
-                self.push(CharClass(DynamicClass(ranges), negated, casei)),
+                self.push(CharClass(Dynamic(ranges), negated, casei)),
             ~Begin(multi) => self.push(EmptyBegin(multi)),
             ~End(multi) => self.push(EmptyEnd(multi)),
             ~WordBoundary(yes) => self.push(EmptyWordBoundary(yes)),
