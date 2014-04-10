@@ -22,7 +22,7 @@
 // AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
 
 use std::mem;
-use super::compile::{Program, Char, CharClass, Any,
+use super::compile::{Program, Char_, CharClass, Any_,
                      EmptyBegin, EmptyEnd, EmptyWordBoundary,
                      Match, Save, Jump, Split};
 
@@ -193,7 +193,7 @@ impl<'r> Vm<'r> {
                         }
                         clist.empty();
                     }
-                    Char(c, casei) => {
+                    Char_(c, casei) => {
                         if self.char_eq(casei, ic, c) {
                             self.add(&mut nlist, pc+1, ic+1, clist.groups(i));
                         }
@@ -209,9 +209,9 @@ impl<'r> Vm<'r> {
                             }
                         }
                     }
-                    Any(true) =>
+                    Any_(true) =>
                         self.add(&mut nlist, pc+1, ic+1, clist.groups(i)),
-                    Any(false) => {
+                    Any_(false) => {
                         if !self.char_eq(false, ic, '\n') {
                             self.add(&mut nlist, pc+1, ic+1, clist.groups(i))
                         }
@@ -288,7 +288,7 @@ impl<'r> Vm<'r> {
                 self.add(nlist, y, ic, groups);
             }
             // Handled in 'run'
-            Match | Char(_, _) | CharClass(_, _, _) | Any(_) => {
+            Match | Char_(_, _) | CharClass(_, _, _) | Any_(_) => {
                 // If captures are enabled, then we need to indicate that
                 // this isn't an empty state.
                 // Otherwise, we say it's an empty state (even though it isn't)

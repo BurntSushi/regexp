@@ -44,6 +44,7 @@ impl Regexp {
     /// Returns the start and end byte range of the leftmost-longest match in 
     /// `text`. If no match exists, then `None` is returned.
     pub fn find(&self, text: &str) -> Option<(uint, uint)> {
+        println!("INSTS: {}", self.comp.insts);
         *self.run(text).get(0)
     }
 
@@ -522,4 +523,165 @@ fn char_to_byte_indices(input: &str) -> Vec<uint> {
     // Push one more for the length.
     bytei.push(input.len());
     bytei
+}
+
+pub mod macro {
+    #![allow(unused_imports)]
+
+    use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
+    use syntax::ast::{Ident, Expr, Expr_, ExprLit, LitStr, ExprVec, ExprMac};
+    use syntax::codemap::{Span, DUMMY_SP};
+    use syntax::ext::base::{SyntaxExtension,
+                            ExtCtxt,
+                            MacResult,
+                            MRExpr,
+                            NormalTT,
+                            BasicMacroExpander};
+    use syntax::parse;
+    use syntax::parse::token;
+    use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
+
+    use super::Regexp;
+    use super::super::compile::{Program, Inst};
+    use super::super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
+    use super::super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
+
+    #[macro_registrar]
+    pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
+        reg(token::intern("re"),
+            NormalTT(~BasicMacroExpander {
+                expander: expand_re,
+                span: None,
+            },
+            None));
+    }
+
+    fn expand_re(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
+        let restr = match parse_one_str_lit(cx, tts) {
+            Some(re) => re,
+            None => return MacResult::dummy_expr(sp),
+        };
+
+        let re = match Regexp::new(restr.to_owned()) {
+            Ok(re) => re,
+            Err(err) => {
+                cx.span_err(sp, err.to_str());
+                return MacResult::dummy_expr(sp)
+            }
+        };
+        let insts = as_expr_vec(cx, sp, re.comp.insts.as_slice(),
+                                inst_to_expr);
+        let names = as_expr_vec(cx, sp, re.comp.names.as_slice(),
+            |cx, sp, name| match name {
+                &Some(ref name) => quote_expr!(cx, Some($name.to_owned())),
+                &None => quote_expr!(cx, None),
+            }
+        );
+        let prefix = as_expr_vec(cx, sp, re.comp.prefix.as_slice(),
+            |cx, sp, &c| quote_expr!(cx, c));
+        MRExpr(quote_expr!(&*cx,
+            regexp::program::make_regexp($restr, $insts, $names, $prefix)
+        ))
+    }
+
+    trait ToTokens {
+        fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
+    }
+
+    impl ToTokens for char {
+        fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree> {
+            vec!(TTTok(DUMMY_SP, LIT_CHAR((*self) as u32)))
+        }
+    }
+
+    impl ToTokens for bool {
+        fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree> {
+            vec!(TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
+        }
+    }
+
+    fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
+        match inst {
+            &Match => quote_expr!(&*cx, regexp::program::Match),
+            &Char_(c, casei) =>
+                quote_expr!(&*cx, regexp::program::Char_($c, $casei)),
+            &CharClass(ref ranges, negated, casei) => {
+                let ranges = as_expr_vec(cx, sp, ranges.as_slice(),
+                    |cx, sp, &(x, y)| quote_expr!(&*cx, ($x, $y)));
+                quote_expr!(
+                    &*cx, regexp::program::CharClass($ranges, $negated, $casei))
+            }
+            &Any_(multi) =>
+                quote_expr!(&*cx, regexp::program::Any($multi)),
+            &EmptyBegin(multi) =>
+                quote_expr!(&*cx, regexp::program::EmptyBegin($multi)),
+            &EmptyEnd(multi) =>
+                quote_expr!(&*cx, regexp::program::EmptyEnd($multi)),
+            &EmptyWordBoundary(multi) =>
+                quote_expr!(&*cx, regexp::program::EmptyWordBoundary($multi)),
+            &Save(slot) =>
+                quote_expr!(&*cx, regexp::program::Save($slot)),
+            &Jump(pc) =>
+                quote_expr!(&*cx, regexp::program::Jump($pc)),
+            &Split(x, y) =>
+                quote_expr!(&*cx, regexp::program::Split($x, $y)),
+        }
+    }
+
+    fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
+                      to_expr: |&mut ExtCtxt, Span, &T| -> @Expr) -> @Expr {
+        let mut exprs = vec!();
+        for x in xs.iter() {
+            exprs.push(to_expr(&mut *cx, sp, x))
+        }
+        let vec_exprs = as_expr(sp, ExprVec(exprs));
+        quote_expr!(&*cx, Vec::from_slice(&$vec_exprs))
+    }
+
+    fn as_expr(sp: Span, e: Expr_) -> @Expr {
+        @Expr {
+            id: DUMMY_NODE_ID,
+            node: e,
+            span: sp,
+        }
+    }
+
+    fn parse_one_str_lit(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<~str> {
+        let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
+                                                    Vec::from_slice(tts));
+        let entry = parser.parse_expr();
+
+        let lit = match entry.node {
+            ExprLit(lit) => {
+                match lit.node {
+                    LitStr(ref s, _) => s.clone(),
+                    _ => {
+                        cx.span_err(entry.span, "expected string literal");
+                        return None
+                    }
+                }
+            }
+            _ => {
+                cx.span_err(entry.span, "expected string literal");
+                return None
+            }
+        };
+        if !parser.eat(&EOF) {
+            cx.span_err(parser.span, "only one string literal allowed");
+            return None;
+        }
+        Some(lit.to_str().to_owned())
+    }
+
+    pub fn make_regexp(orig: &str, insts: Vec<Inst>, names: Vec<Option<~str>>,
+                   prefix: Vec<char>) -> Regexp {
+        Regexp {
+            orig: orig.to_owned(),
+            comp: Program {
+                insts: insts,
+                names: names,
+                prefix: prefix,
+            },
+        }
+    }
 }

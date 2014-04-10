@@ -1,6 +1,9 @@
 // Originally written by JustAPerson (https://github.com/JustAPerson).
 // Modified by Andrew Gallant (https://github.com/BurntSushi).
-extern crate regexp;
+
+#![feature(phase)]
+
+#[phase(syntax, link)] extern crate regexp;
 
 use regexp::{Regexp, NoExpand};
  
@@ -44,7 +47,7 @@ fn main() {
     let mut seq = stdin.read_to_str().unwrap();
     let ilen = seq.len();
  
-    seq = replace(seq, "(>[^\n]+)?\n", "");
+    seq = re!("(>[^\n]+)?\n").replace_all(seq, NoExpand(""));
     let clen = seq.len();
  
     for variant in VARIANTS.iter() {

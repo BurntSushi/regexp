@@ -1,3 +1,5 @@
+#![allow(visible_private_types)]
+
 use std::cmp;
 use std::iter;
 use super::parse;
@@ -7,14 +9,14 @@ use super::parse::{ZeroOne, ZeroMore, OneMore};
 
 type InstIdx = uint;
 
-#[deriving(Show)]
+#[deriving(Show, Clone)]
 pub enum Inst {
     // When a Match instruction is executed, the current thread is successful.
     Match,
 
     // The Char instruction matches a literal character.
     // If the bool is true, then the match is done case insensitively.
-    Char(char, bool),
+    Char_(char, bool),
 
     // The CharClass instruction tries to match one input character against
     // the range of characters given.
@@ -25,7 +27,7 @@ pub enum Inst {
 
     // Matches any character except new lines.
     // If the bool is true, then new lines are matched.
-    Any(bool),
+    Any_(bool),
 
     // Matches the beginning of the string, consumes no characters.
     // If the bool is true, then it also matches when the preceding character
@@ -79,7 +81,7 @@ impl Program {
         let mut pre = Vec::with_capacity(5);
         for i in iter::range(1, c.insts.len()) {
             match *c.insts.get(i) {
-                Char(c, false) => pre.push(c),
+                Char_(c, false) => pre.push(c),
                 _ => break
             }
         }
@@ -110,8 +112,8 @@ impl Compiler {
     fn compile(&mut self, ast: ~parse::Ast) {
         match ast {
             ~Nothing => {},
-            ~Literal(c, casei) => self.push(Char(c, casei)),
-            ~Dot(nl) => self.push(Any(nl)),
+            ~Literal(c, casei) => self.push(Char_(c, casei)),
+            ~Dot(nl) => self.push(Any_(nl)),
             ~Class(ranges, negated, casei) =>
                 self.push(CharClass(ranges, negated, casei)),
             ~Begin(multi) => self.push(EmptyBegin(multi)),

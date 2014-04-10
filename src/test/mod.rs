@@ -53,7 +53,12 @@ mod debug {
         // print_matches(r"(\pN)(\pN)(\pN)(\pN)", "ⅡⅢⅳⅥ"); 
         // print_matches(r"(a*)*", "ⅡⅢⅳⅥ"); 
         // debug!("{}", Regexp::new("abcd").unwrap().is_match("watabcd")); 
-        debug!("{}", Regexp::new("multiple words").unwrap().is_match("multiple words yeah"));
+        // debug!("{}", Regexp::new("multiple words").unwrap().is_match("multiple words yeah")); 
+        // print_matches(r"(A?AB?B)*", "AB"); 
+        // print_matches(r"(A?AB?B)*", "AB"); 
+        // print_matches(r"(a|bcdef|g|ab|c|d|e|efg|fg)*", "abcdefg"); 
+        // debug!("{}", re!("z", "hello", "a")); 
+        print_matches(r"b+", "bbbaaaa");
     }
 }
 

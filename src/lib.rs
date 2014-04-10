@@ -1,17 +1,21 @@
 #![crate_id = "regexp#0.1.0"]
-#![crate_type = "lib"]
+#![crate_type = "rlib"]
+#![crate_type = "dylib"]
 #![license = "UNLICENSE"]
 #![doc(html_root_url = "http://burntsushi.net/rustdoc/regexp")]
 
 //! Regular expressions for Rust.
 
+#![feature(macro_registrar, managed_boxes)]
 #![feature(macro_rules)]
 #![feature(phase)]
+#![feature(quote)]
 
 extern crate collections;
 #[phase(syntax, link)]
 extern crate log;
 extern crate rand;
+extern crate syntax;
 
 #[cfg(bench)]
 extern crate stdtest = "test";
@@ -26,6 +30,7 @@ use parse::is_punct;
 pub use regexp::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use regexp::{FindCaptures, FindMatches};
 pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
+pub use regexp::macro::macro_registrar;
 
 mod compile;
 mod parse;
@@ -79,4 +84,12 @@ pub fn quote(text: &str) -> ~str {
 /// returned.
 pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
+}
+
+/// The `program` module exists to support the `re!` macro. Do not use.
+pub mod program {
+    pub use super::compile::Program;
+    pub use super::compile::{Inst, Char_, CharClass, Any_, Save, Jump, Split};
+    pub use super::compile::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
+    pub use super::regexp::macro::make_regexp;
 }
