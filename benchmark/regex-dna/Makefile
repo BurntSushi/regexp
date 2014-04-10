@@ -14,7 +14,7 @@ generator: shootout-fasta.rs
 
 run-rust: regex-dna.rs
 	(cd ../.. && make compile)
-	rustc --opt-level=3 -L ../../build regex-dna.rs -o run-rust
+	rustc --opt-level=3 -Z lto -L ../../build regex-dna.rs -o run-rust
 
 run-golang: regex-dna.go
 	go build -o run-golang regex-dna.go
