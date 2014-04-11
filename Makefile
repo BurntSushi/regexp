@@ -39,7 +39,7 @@ docs: $(SRCFILES)
 	in-dir doc fix-perms
 	rscp ./doc/* gopher:~/www/burntsushi.net/rustdoc/
 
-test: build/tests test-re
+test: build/tests
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests
 
 build/tests: $(SRC_FILES)
@@ -48,7 +48,7 @@ build/tests: $(SRC_FILES)
 test-re: build/tests-re
 	RUST_TEST_TASKS=1 RUST_LOG=regexp,regex_re_test ./build/tests-re
 
-build/tests-re: $(SRC_FILES)
+build/tests-re: $(SRC_FILES) $(REGEXP_MACRO_LIB)
 	rustc $(RUSTTESTFLAGS) --test src/test/macro.rs -o ./build/tests-re
 
 bench: build/bench
