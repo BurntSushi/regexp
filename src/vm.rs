@@ -22,10 +22,12 @@
 // AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
 
 use std::mem;
-use super::compile::{Program,
-                     OneChar, CharClass, Any,
-                     EmptyBegin, EmptyEnd, EmptyWordBoundary,
-                     Match, Save, Jump, Split};
+use super::compile::{
+    Program,
+    Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
+    Save, Jump, Split,
+};
+use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 
 pub type CapturePairs = Vec<Option<(uint, uint)>>;
 pub type CaptureLocs = Vec<Option<uint>>;
@@ -149,13 +151,15 @@ impl<'r, 't> Nfa<'r, 't> {
                     return (Some(caps), false)
                 }
             }
-            OneChar(c, casei) => {
-                if self.char_eq(casei, ic, c) {
+            OneChar(c, flags) => {
+                if self.char_eq(flags & FLAG_NOCASE > 0, ic, c) {
                     self.add(nlist, pc+1, ic+1, caps);
                 }
             }
-            CharClass(ref ranges, negate, casei) => {
+            CharClass(ref ranges, flags) => {
                 if ic < self.input.len() {
+                    let negate = flags & FLAG_NEGATED > 0;
+                    let casei = flags & FLAG_NOCASE > 0;
                     let c = self.get(ic);
                     let found = ranges.as_slice();
                     let found = found.bsearch(|&rc| class_cmp(casei, c, rc));
@@ -165,10 +169,8 @@ impl<'r, 't> Nfa<'r, 't> {
                     }
                 }
             }
-            Any(true) =>
-                self.add(nlist, pc+1, ic+1, caps),
-            Any(false) => {
-                if !self.char_eq(false, ic, '\n') {
+            Any(flags) => {
+                if flags & FLAG_DOTNL > 0 || !self.char_eq(false, ic, '\n') {
                     self.add(nlist, pc+1, ic+1, caps)
                 }
             }
@@ -198,22 +200,23 @@ impl<'r, 't> Nfa<'r, 't> {
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
         match self.prog.insts.as_slice()[pc] {
-            EmptyBegin(multi) => {
+            EmptyBegin(flags) => {
+                let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
                 if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
-            EmptyEnd(multi) => {
+            EmptyEnd(flags) => {
+                let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
                 if self.is_end(ic) || (multi && self.char_is(ic, '\n')) {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
-            EmptyWordBoundary(yes) => {
+            EmptyWordBoundary(flags) => {
                 nlist.add(pc, groups, true);
-                let wb = self.is_word_boundary(ic);
-                if yes == wb {
+                if self.is_word_boundary(ic) == !(flags & FLAG_NEGATED > 0) {
                     self.add(nlist, pc + 1, ic, groups)
                 }
             }
@@ -237,7 +240,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, x, ic, groups);
                 self.add(nlist, y, ic, groups);
             }
-            Match | OneChar(_, _) | CharClass(_, _, _) | Any(_) => {
+            Match | OneChar(_, _) | CharClass(_, _) | Any(_) => {
                 // If captures are enabled, then we need to indicate that
                 // this isn't an empty state.
                 // Otherwise, we say it's an empty state (even though it isn't)

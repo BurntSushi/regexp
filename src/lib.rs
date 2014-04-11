@@ -84,6 +84,7 @@ pub mod program {
     //
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation, which is an acceptable compromise.
+    pub use super::parse::Flags;
     pub use super::compile::{
         Program, MaybeStatic,
         Inst, OneChar, CharClass, Any, Save, Jump, Split,

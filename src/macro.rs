@@ -25,9 +25,11 @@ use syntax::parse::token;
 use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 
 use regexp::Regexp;
-use regexp::program::MaybeStatic;
-use regexp::program::{Inst, OneChar, CharClass, Any, Save, Jump, Split};
-use regexp::program::{Match, EmptyBegin, EmptyEnd, EmptyWordBoundary};
+use regexp::program::{
+    MaybeStatic, Flags,
+    Inst, OneChar, CharClass, Any, Save, Jump, Split,
+    Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
+};
 
 /// For the `re!` syntax extension. Do not use.
 #[macro_registrar]
@@ -100,8 +102,8 @@ fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
         &Match => quote_expr!(&*cx, regexp::program::Match),
         &OneChar(c, casei) =>
             quote_expr!(&*cx, regexp::program::OneChar($c, $casei)),
-        &CharClass(ref ranges, negated, casei) => {
-            char_class_to_expr(cx, sp, ranges, negated, casei)
+        &CharClass(ref ranges, flags) => {
+            char_class_to_expr(cx, sp, ranges, flags)
         }
         &Any(multi) =>
             quote_expr!(&*cx, regexp::program::Any($multi)),
@@ -122,12 +124,11 @@ fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
 
 fn char_class_to_expr(cx: &mut ExtCtxt, sp: Span,
                       ranges: &MaybeStatic<(char, char)>,
-                      negated: bool, casei: bool) -> @Expr {
+                      flags: Flags) -> @Expr {
     let ranges = as_expr_vec_static(cx, sp, ranges.as_slice(),
         |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
     quote_expr!(&*cx,
-        regexp::program::CharClass(
-            regexp::program::Static($ranges), $negated, $casei))
+        regexp::program::CharClass(regexp::program::Static($ranges), $flags))
 }
 
 fn as_expr_vec_static<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],

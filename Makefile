@@ -1,31 +1,27 @@
 RUSTC ?= rustc
 RUSTDOC ?= rustdoc
-RUST_PATH ?= ./build/
+BUILD_DIR ?= ./build/
+RUST_PATH ?= $(BUILD_DIR)
 RUSTFLAGS ?= --opt-level=3
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
-SRC_FILES = src/lib.rs src/parse.rs src/compile.rs src/vm.rs \
-						src/unicode.rs src/regexp.rs src/macro.rs \
-						src/test/mod.rs src/test/matches.rs src/test/bench.rs \
-						src/test/macro.rs
+SRC_FILES = $(wildcard src/*.rs) $(wildcard src/test/*.rs)
+REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
+REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_re.timestamp
 
-compile:
-	make regexp
-	make regexp-re
-
-regexp:
-	$(RUSTC) -L $(RUST_PATH) $(RUSTFLAGS) ./src/lib.rs --out-dir=./build
-
-regexp-re:
-	$(RUSTC) -L $(RUST_PATH) $(RUSTFLAGS) ./src/macro.rs --out-dir=./build
-
-macros: macros.rs
-	$(RUSTC) -L $(RUST_PATH) macros.rs -o macros
+all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 
 install:
-	cargo-lite install --debug
+	cargo-lite install
 
-ctags:
-	ctags --recurse --options=ctags.rust --languages=Rust
+$(REGEXP_LIB): $(SRC_FILES)
+	@mkdir -p $(BUILD_DIR)
+	$(RUSTC) $(RUSTFLAGS) ./src/lib.rs --out-dir=$(BUILD_DIR)
+	@touch $(REGEXP_LIB)
+
+$(REGEXP_MACRO_LIB): $(REGEXP_LIB)
+	@mkdir -p $(BUILD_DIR)
+	$(RUSTC) -L $(BUILD_DIR) $(RUSTFLAGS) ./src/macro.rs --out-dir=$(BUILD_DIR)
+	@touch $(REGEXP_MACRO_LIB)
 
 match-tests:
 	./make-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
@@ -55,12 +51,6 @@ test-re: build/tests-re
 build/tests-re: $(SRC_FILES)
 	rustc $(RUSTTESTFLAGS) --test src/test/macro.rs -o ./build/tests-re
 
-debug: build/debug
-	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/debug
-
-build/debug: $(SRC_FILES)
-	rustc $(RUSTTESTFLAGS) --test --cfg debug src/lib.rs -o ./build/debug
-
 bench: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench
 
@@ -70,8 +60,17 @@ bench-perf: build/bench
 build/bench: $(SRC_FILES)
 	rustc $(RUSTFLAGS) -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
 
+scratch: build/scratch
+	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/scratch
+
+build/scratch: $(REGEXP_MACRO_LIB) scratch.rs
+	rustc -L $(BUILD_DIR) $(RUSTTESTFLAGS) scratch.rs -o ./build/scratch
+
+ctags:
+	ctags --recurse --options=ctags.rust --languages=Rust
+
 clean:
-	rm -rf ./build/*
+	rm -rf ./build/* ./build/.*.timestamp
 
 push:
 	git push origin master

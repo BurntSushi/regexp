@@ -5,9 +5,12 @@ use std::iter;
 use std::slice::Vector;
 use std::str::{MaybeOwned, Owned};
 use super::parse;
-use super::parse::{Nothing, Literal, Dot, Class, Begin, End, WordBoundary};
-use super::parse::{Capture, Cat, Alt, Rep};
-use super::parse::{ZeroOne, ZeroMore, OneMore};
+use super::parse::{
+    Flags, FLAG_EMPTY,
+    Nothing, Literal, Dot, Class, Begin, End, WordBoundary, Capture, Cat, Alt,
+    Rep,
+    ZeroOne, ZeroMore, OneMore,
+};
 
 type InstIdx = uint;
 
@@ -37,34 +40,34 @@ pub enum Inst {
 
     // The OneChar instruction matches a literal character.
     // If the bool is true, then the match is done case insensitively.
-    OneChar(char, bool),
+    OneChar(char, Flags),
 
     // The CharClass instruction tries to match one input character against
     // the range of characters given.
     // If the first bool is true, then the character class is negated.
     // If the second bool is true, then the character class is matched
     // case insensitively.
-    CharClass(MaybeStatic<(char, char)>, bool, bool),
+    CharClass(MaybeStatic<(char, char)>, Flags),
 
     // Matches any character except new lines.
     // If the bool is true, then new lines are matched.
-    Any(bool),
+    Any(Flags),
 
     // Matches the beginning of the string, consumes no characters.
     // If the bool is true, then it also matches when the preceding character
     // is a new line.
-    EmptyBegin(bool),
+    EmptyBegin(Flags),
 
     // Matches the end of the string, consumes no characters.
     // If the bool is true, then it also matches when the proceeding character
     // is a new line.
-    EmptyEnd(bool),
+    EmptyEnd(Flags),
 
     // Matches a word boundary (\w on one side and \W \A or \z on the other),
     // and consumes no character.
     // If the bool is false, then it matches anything that is NOT a word
     // boundary.
-    EmptyWordBoundary(bool),
+    EmptyWordBoundary(Flags),
 
     // Saves the current position in the input string to the Nth save slot.
     Save(uint),
@@ -103,7 +106,7 @@ impl Program {
         let mut pre = Vec::with_capacity(5);
         for i in iter::range(1, c.insts.len()) {
             match *c.insts.get(i) {
-                OneChar(c, false) => pre.push(c),
+                OneChar(c, FLAG_EMPTY) => pre.push(c),
                 _ => break
             }
         }
@@ -141,13 +144,13 @@ impl<'r> Compiler<'r> {
     fn compile(&mut self, ast: ~parse::Ast) {
         match ast {
             ~Nothing => {},
-            ~Literal(c, casei) => self.push(OneChar(c, casei)),
+            ~Literal(c, flags) => self.push(OneChar(c, flags)),
             ~Dot(nl) => self.push(Any(nl)),
-            ~Class(ranges, negated, casei) =>
-                self.push(CharClass(Dynamic(ranges), negated, casei)),
-            ~Begin(multi) => self.push(EmptyBegin(multi)),
-            ~End(multi) => self.push(EmptyEnd(multi)),
-            ~WordBoundary(yes) => self.push(EmptyWordBoundary(yes)),
+            ~Class(ranges, flags) =>
+                self.push(CharClass(Dynamic(ranges), flags)),
+            ~Begin(flags) => self.push(EmptyBegin(flags)),
+            ~End(flags) => self.push(EmptyEnd(flags)),
+            ~WordBoundary(flags) => self.push(EmptyWordBoundary(flags)),
             ~Capture(cap, name, x) => {
                 let len = self.names.len();
                 if cap >= len {

@@ -1,14 +1,16 @@
 use std::char;
 use std::cmp;
-use std::from_str::FromStr;
 use std::iter;
 use std::num;
 use std::str;
 
 use self::unicode::UNICODE_CLASSES;
 
+/// Includes Unicode character classes (just the general categories and
+/// scripts).
 mod unicode;
 
+/// The maximum number of repetitions allowed with the `{n,m}` syntax.
 static MAX_REPEAT: uint = 1000;
 
 /// Error corresponds to something that can go wrong while parsing
@@ -24,12 +26,12 @@ pub struct Error {
 #[deriving(Show, Clone)]
 pub enum Ast {
     Nothing,
-    Literal(char, bool),
-    Dot(bool),
-    Class(Vec<(char, char)>, bool, bool),
-    Begin(bool),
-    End(bool),
-    WordBoundary(bool),
+    Literal(char, Flags),
+    Dot(Flags),
+    Class(Vec<(char, char)>, Flags),
+    Begin(Flags),
+    End(Flags),
+    WordBoundary(Flags),
     Capture(uint, Option<~str>, ~Ast),
     // Represent concatenation as a flat vector to avoid blowing the
     // stack in the compiler.
@@ -43,22 +45,6 @@ pub enum Repeater {
     ZeroOne,
     ZeroMore,
     OneMore,
-}
-
-impl FromStr for Repeater {
-    fn from_str(s: &str) -> Option<Repeater> {
-        if s.len() != 1 { return None }
-        match s.char_at(0) {
-            '?' => Some(ZeroOne),
-            '*' => Some(ZeroMore),
-            '+' => Some(OneMore),
-            _ => None,
-        }
-    }
-}
-
-fn from_char<T: FromStr>(c: char) -> Option<T> {
-    from_str(str::from_char(c))
 }
 
 #[deriving(Show, Clone)]
@@ -143,45 +129,14 @@ impl BuildAst {
     }
 }
 
-#[deriving(Show)]
-struct Flags(uint);
+pub type Flags = u8;
 
-#[deriving(Show)]
-pub enum Flag {
-    Empty = 0,
-    CaseI = 1, // i
-    Multi = 2, // m
-    DotNL = 4, // s
-    SwapGreed = 8, // U
-}
-
-impl Flags {
-    fn is_set(&self, f2: Flag) -> bool {
-        let Flags(f1) = *self;
-        f1 & (f2 as uint) > 0
-    }
-}
-
-impl BitAnd<Flag, Flags> for Flags {
-    fn bitand(&self, rhs: &Flag) -> Flags {
-        let Flags(f) = *self;
-        Flags(f & ((*rhs) as uint))
-    }
-}
-
-impl BitOr<Flag, Flags> for Flags {
-    fn bitor(&self, rhs: &Flag) -> Flags {
-        let Flags(f) = *self;
-        Flags(f | ((*rhs) as uint))
-    }
-}
-
-impl BitXor<Flags, Flags> for Flags {
-    fn bitxor(&self, rhs: &Flags) -> Flags {
-        let (Flags(f1), Flags(f2)) = (*self, *rhs);
-        Flags(f1 ^ (f2 as uint))
-    }
-}
+pub static FLAG_EMPTY:      u8 = 0;
+pub static FLAG_NOCASE:     u8 = 1 << 0; // i
+pub static FLAG_MULTI:      u8 = 1 << 1; // m
+pub static FLAG_DOTNL:      u8 = 1 << 2; // s
+pub static FLAG_SWAP_GREED: u8 = 1 << 3; // U
+pub static FLAG_NEGATED:    u8 = 1 << 4; // char class or not word boundary
 
 struct Parser<'a> {
     chars: Vec<char>,
@@ -225,7 +180,7 @@ pub fn parse(s: &str) -> Result<~Ast, Error> {
         chars: s.chars().collect(),
         chari: 0,
         stack: vec!(),
-        flags: Flags(Empty as uint),
+        flags: FLAG_EMPTY,
         caps: 0,
     }.parse()
 }
@@ -325,9 +280,9 @@ impl<'a> Parser<'a> {
             return self.err(
                 "A repeat operator must be preceded by a valid expression.")
         }
-        let rep: Repeater = match from_char(c) {
-            None => fail!("Not a valid repeater operator."),
-            Some(r) => r,
+        let rep: Repeater = match c {
+            '?' => ZeroOne, '*' => ZeroMore, '+' => OneMore,
+            _ => fail!("Not a valid repeater operator."),
         };
 
         match self.peek(1) {
@@ -351,20 +306,16 @@ impl<'a> Parser<'a> {
     fn push_literal(&mut self, c: char) -> Result<(), Error> {
         match c {
             '.' => {
-                let dotnl = self.flags.is_set(DotNL);
-                self.push(~Dot(dotnl))
+                self.push(~Dot(self.flags))
             }
             '^' => {
-                let multi = self.flags.is_set(Multi);
-                self.push(~Begin(multi))
+                self.push(~Begin(self.flags))
             }
             '$' => {
-                let multi = self.flags.is_set(Multi);
-                self.push(~End(multi))
+                self.push(~End(self.flags))
             }
             _ => {
-                let casei = self.flags.is_set(CaseI);
-                self.push(~Literal(c, casei))
+                self.push(~Literal(c, self.flags))
             }
         }
         Ok(())
@@ -374,8 +325,13 @@ impl<'a> Parser<'a> {
     // Assumes that '[' has already been consumed.
     fn parse_class(&mut self) -> Result<(), Error> {
         let start = self.chari;
-        let negated = self.peek_is(1, '^');
-        if negated { self.next_char() }
+        let negated =
+            if self.peek_is(1, '^') {
+                self.next_char();
+                FLAG_NEGATED
+            } else {
+                FLAG_EMPTY
+            };
         let mut ranges: Vec<(char, char)> = vec!();
         let mut alts: Vec<~Ast> = vec!();
 
@@ -393,8 +349,8 @@ impl<'a> Parser<'a> {
             match c {
                 '[' =>
                     match self.try_parse_ascii() {
-                        Some(~Class(asciis, neg, casei)) => {
-                            alts.push(~Class(asciis, neg ^ negated, casei));
+                        Some(~Class(asciis, flags)) => {
+                            alts.push(~Class(asciis, flags ^ negated));
                             self.next_char();
                             continue
                         }
@@ -405,8 +361,8 @@ impl<'a> Parser<'a> {
                     },
                 '\\' => {
                     match try!(self.parse_escape()) {
-                        ~Class(asciis, neg, casei) => {
-                            alts.push(~Class(asciis, neg ^ negated, casei));
+                        ~Class(asciis, flags) => {
+                            alts.push(~Class(asciis, flags ^ negated));
                             self.next_char();
                             continue
                         }
@@ -423,9 +379,8 @@ impl<'a> Parser<'a> {
             match c {
                 ']' => {
                     if ranges.len() > 0 {
-                        let casei = self.flags.is_set(CaseI);
-                        let mut ast = ~Class(combine_ranges(ranges),
-                                             negated, casei);
+                        let flags = negated | (self.flags & FLAG_NOCASE);
+                        let mut ast = ~Class(combine_ranges(ranges), flags);
                         for alt in alts.move_iter() {
                             ast = ~Alt(alt, ast)
                         }
@@ -483,16 +438,21 @@ impl<'a> Parser<'a> {
         if closer - self.chari <= 3 {
             return None
         }
-        let negated = self.peek_is(2, '^');
         let mut name_start = self.chari + 2;
-        if negated { name_start += 1 }
+        let negated =
+            if self.peek_is(2, '^') {
+                name_start += 1;
+                FLAG_NEGATED
+            } else {
+                FLAG_EMPTY
+            };
         let name = self.slice(name_start, closer - 1);
         match find_class(ASCII_CLASSES, name) {
             None => None,
             Some(ranges) => {
-                let casei = self.flags.is_set(CaseI);
                 self.chari = closer;
-                Some(~Class(combine_ranges(ranges), negated, casei))
+                let flags = negated | (self.flags & FLAG_NOCASE);
+                Some(~Class(combine_ranges(ranges), flags))
             }
         }
     }
@@ -596,19 +556,19 @@ impl<'a> Parser<'a> {
 
         let c = self.cur();
         if is_punct(c) {
-            return Ok(~Literal(c, false))
+            return Ok(~Literal(c, FLAG_EMPTY))
         }
         match c {
-            'a' => Ok(~Literal('\x07', false)),
-            'f' => Ok(~Literal('\x0C', false)),
-            't' => Ok(~Literal('\t', false)),
-            'n' => Ok(~Literal('\n', false)),
-            'r' => Ok(~Literal('\r', false)),
-            'v' => Ok(~Literal('\x0B', false)),
-            'A' => Ok(~Begin(false)),
-            'z' => Ok(~End(false)),
-            'b' => Ok(~WordBoundary(true)),
-            'B' => Ok(~WordBoundary(false)),
+            'a' => Ok(~Literal('\x07', FLAG_EMPTY)),
+            'f' => Ok(~Literal('\x0C', FLAG_EMPTY)),
+            't' => Ok(~Literal('\t', FLAG_EMPTY)),
+            'n' => Ok(~Literal('\n', FLAG_EMPTY)),
+            'r' => Ok(~Literal('\r', FLAG_EMPTY)),
+            'v' => Ok(~Literal('\x0B', FLAG_EMPTY)),
+            'A' => Ok(~Begin(FLAG_EMPTY)),
+            'z' => Ok(~End(FLAG_EMPTY)),
+            'b' => Ok(~WordBoundary(FLAG_EMPTY)),
+            'B' => Ok(~WordBoundary(FLAG_NEGATED)),
             '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7' => Ok(try!(self.parse_octal())),
             'x' => Ok(try!(self.parse_hex())),
             'p' | 'P' => Ok(try!(self.parse_unicode_name())),
@@ -617,9 +577,9 @@ impl<'a> Parser<'a> {
                 match find_class(PERL_CLASSES, name) {
                     None => fail!("Could not find Perl class '{}'", c),
                     Some(ranges) => {
-                        let negated = c.is_uppercase();
-                        let casei = self.flags.is_set(CaseI);
-                        Ok(~Class(combine_ranges(ranges), negated, casei))
+                        let mut flags = self.flags & FLAG_NOCASE;
+                        if c.is_uppercase() { flags |= FLAG_NEGATED }
+                        Ok(~Class(combine_ranges(ranges), flags))
                     }
                 }
             }
@@ -632,7 +592,7 @@ impl<'a> Parser<'a> {
     // name is the unicode class name.
     // Assumes that \p or \P has been read.
     fn parse_unicode_name(&mut self) -> Result<~Ast, Error> {
-        let negated = self.cur() == 'P';
+        let negated = if self.cur() == 'P' { FLAG_NEGATED } else { FLAG_EMPTY };
         let mut name: ~str;
         if self.peek_is(1, '{') {
             self.next_char();
@@ -659,8 +619,7 @@ impl<'a> Parser<'a> {
             None => return self.err(format!(
                 "Could not find Unicode class '{}'", name)),
             Some(ranges) => {
-                let casei = self.flags.is_set(CaseI);
-                Ok(~Class(ranges, negated, casei))
+                Ok(~Class(ranges, negated | (self.flags & FLAG_NOCASE)))
             }
         }
     }
@@ -681,7 +640,7 @@ impl<'a> Parser<'a> {
         }
         let s = self.slice(start, end);
         match num::from_str_radix::<u32>(s, 8) {
-            Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), false)),
+            Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
             None => self.err(format!(
                 "Could not parse '{}' as octal number.", s)),
         }
@@ -720,7 +679,7 @@ impl<'a> Parser<'a> {
 
     fn parse_hex_digits(&self, s: &str) -> Result<~Ast, Error> {
         match num::from_str_radix::<u32>(s, 16) {
-            Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), false)),
+            Some(n) => Ok(~Literal(try!(self.char_from_u32(n)), FLAG_EMPTY)),
             None => self.err(format!(
                 "Could not parse '{}' as hex number.", s)),
         }
@@ -763,10 +722,10 @@ impl<'a> Parser<'a> {
         let mut saw_flag = false;
         while self.chari < self.chars.len() {
             match self.cur() {
-                'i' => { flags = flags | CaseI;     saw_flag = true},
-                'm' => { flags = flags | Multi;     saw_flag = true},
-                's' => { flags = flags | DotNL;     saw_flag = true},
-                'U' => { flags = flags | SwapGreed; saw_flag = true},
+                'i' => { flags = flags | FLAG_NOCASE;     saw_flag = true},
+                'm' => { flags = flags | FLAG_MULTI;     saw_flag = true},
+                's' => { flags = flags | FLAG_DOTNL;     saw_flag = true},
+                'U' => { flags = flags | FLAG_SWAP_GREED; saw_flag = true},
                 '-' => {
                     if sign < 0 {
                         return self.err(format!(
@@ -808,7 +767,7 @@ impl<'a> Parser<'a> {
             Ungreedy
         } else {
             Greedy
-        }.swap(self.flags.is_set(SwapGreed))
+        }.swap(self.flags & FLAG_SWAP_GREED > 0)
     }
 
     fn pos_last(&self, allow_start: bool, pred: |&BuildAst| -> bool)
