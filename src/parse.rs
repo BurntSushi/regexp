@@ -70,6 +70,10 @@ impl Greed {
     }
 }
 
+/// BuildAst is a regrettable type that represents intermediate state for
+/// constructing an abstract syntax tree. Its central purpose is to facilitate
+/// parsing groups and alternations while also maintaining a stack of flag
+/// state.
 #[deriving(Show)]
 enum BuildAst {
     Ast(~Ast),
@@ -129,6 +133,8 @@ impl BuildAst {
     }
 }
 
+/// Flags represents all options that can be twiddled by a user in an
+/// expression.
 pub type Flags = u8;
 
 pub static FLAG_EMPTY:      u8 = 0;
@@ -139,40 +145,18 @@ pub static FLAG_SWAP_GREED: u8 = 1 << 3; // U
 pub static FLAG_NEGATED:    u8 = 1 << 4; // char class or not word boundary
 
 struct Parser<'a> {
+    // The input, parsed only as a sequence of UTF8 code points.
     chars: Vec<char>,
+    // The index of the current character in the input.
     chari: uint,
+    // The intermediate state representing the AST.
     stack: Vec<BuildAst>,
+    // The current set of flags.
     flags: Flags,
+    // The total number of capture groups.
+    // Incremented each time an opening left paren is seen (assuming it is
+    // opening a capture group).
     caps: uint,
-}
-
-fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
-    // This is currently O(n^2), but I think with sufficient cleverness,
-    // it can be reduced to O(n) **if necessary**.
-    let mut ordered: Vec<(char, char)> = Vec::with_capacity(unordered.len());
-    for (us, ue) in unordered.move_iter() {
-        let (mut us, mut ue) = (us, ue);
-        assert!(us <= ue);
-        let mut which: Option<uint> = None;
-        for (i, &(os, oe)) in ordered.iter().enumerate() {
-            if should_merge((us, ue), (os, oe)) {
-                us = cmp::min(us, os);
-                ue = cmp::max(ue, oe);
-                which = Some(i);
-                break
-            }
-        }
-        match which {
-            None => ordered.push((us, ue)),
-            Some(i) => *ordered.get_mut(i) = (us, ue),
-        }
-    }
-    ordered.sort();
-    ordered
-}
-
-fn should_merge((a, b): (char, char), (x, y): (char, char)) -> bool {
-    cmp::max(a, x) as u32 <= cmp::min(b, y) as u32 + 1
 }
 
 pub fn parse(s: &str) -> Result<~Ast, Error> {
@@ -873,20 +857,56 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn is_punct(c: char) -> bool {
-    match c {
-        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
-        '[' | ']' | '{' | '}' | '^' | '$' => true,
-        _ => false,
+// Given an unordered collection of character ranges, combine_ranges returns
+// an ordered sequence of character ranges where no two ranges overlap. They 
+// are ordered from least to greatest (using start position).
+fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
+    // Returns true iff the two character classes overlap or share a boundary.
+    // e.g., ('a', 'g') and ('h', 'm') would return true.
+    fn should_merge((a, b): (char, char), (x, y): (char, char)) -> bool {
+        cmp::max(a, x) as u32 <= cmp::min(b, y) as u32 + 1
     }
+
+    // This is currently O(n^2), but I think with sufficient cleverness,
+    // it can be reduced to O(n) **if necessary**.
+    let mut ordered: Vec<(char, char)> = Vec::with_capacity(unordered.len());
+    for (us, ue) in unordered.move_iter() {
+        let (mut us, mut ue) = (us, ue);
+        assert!(us <= ue);
+        let mut which: Option<uint> = None;
+        for (i, &(os, oe)) in ordered.iter().enumerate() {
+            if should_merge((us, ue), (os, oe)) {
+                us = cmp::min(us, os);
+                ue = cmp::max(ue, oe);
+                which = Some(i);
+                break
+            }
+        }
+        match which {
+            None => ordered.push((us, ue)),
+            Some(i) => *ordered.get_mut(i) = (us, ue),
+        }
+    }
+    ordered.sort();
+    ordered
 }
 
+// Returns a concatenation of two expressions. This also guarantees that a
+// `Cat` expression will never be a direct child of another `Cat` expression.
 fn concat_flatten(x: ~Ast, y: ~Ast) -> Ast {
     match (x, y) {
         (~Cat(mut xs), ~Cat(ys)) => { xs.push_all_move(ys); Cat(xs) }
         (~Cat(mut xs), ast) => { xs.push(ast); Cat(xs) }
         (ast, ~Cat(mut xs)) => { xs.unshift(ast); Cat(xs) }
         (ast1, ast2) => Cat(vec!(ast1, ast2)),
+    }
+}
+
+pub fn is_punct(c: char) -> bool {
+    match c {
+        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' |
+        '[' | ']' | '{' | '}' | '^' | '$' => true,
+        _ => false,
     }
 }
 
