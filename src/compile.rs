@@ -87,9 +87,18 @@ pub enum Inst {
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
 /// (This makes it convenient and efficient for use with the `re!` macro.)
 pub struct Program {
+    // A copy of the original regular expression.
+    // It's not currently used.
     pub regex: MaybeOwned<'static>,
+    // A sequence of instructions.
     pub insts: MaybeStatic<Inst>,
+    // A sequence of names in correspondence with the number of capture groups
+    // in an expression. If a capture group doesn't have a name, then the
+    // corresponding position in `names` is None.
     pub names: MaybeStatic<Option<MaybeOwned<'static>>>,
+    // If the regular expression requires a literal prefix in order to have a
+    // match, that prefix is stored here. (It's used in the VM to implement
+    // an optimization.)
     pub prefix: MaybeStatic<char>,
 }
 
