@@ -4,10 +4,8 @@ use std::iter;
 use std::num;
 use std::str;
 
+/// Static data containing Unicode ranges for general categories and scripts.
 use self::unicode::UNICODE_CLASSES;
-
-/// Includes Unicode character classes (just the general categories and
-/// scripts).
 mod unicode;
 
 /// The maximum number of repetitions allowed with the `{n,m}` syntax.
@@ -23,6 +21,14 @@ pub struct Error {
     pub msg: ~str,
 }
 
+/// Represents the abstract syntax of a regular expression.
+/// It is showable so that error messages resulting from a bug can provide
+/// useful information.
+/// It is cloneable so that expressions can be repeated for the counted
+/// repetition feature. (No other copying is done.)
+///
+/// Note that this representation prevents one from reproducing the regexp as
+/// it was typed. (But it could be used to reproduce an equivalent regexp.)
 #[deriving(Show, Clone)]
 pub enum Ast {
     Nothing,
