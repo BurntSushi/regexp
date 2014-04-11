@@ -5,6 +5,9 @@
 
 #![feature(macro_rules, phase, macro_registrar, managed_boxes, quote)]
 
+//! This crate provides the `re!` macro. Its use is documented in the
+//! [`regexp` crate](http://burntsushi.net/rustdoc/regexp/).
+
 extern crate regexp;
 extern crate syntax;
 

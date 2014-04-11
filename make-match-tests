@@ -75,7 +75,7 @@ if __name__ == '__main__':
     for f in args.files:
         tests += read_tests(f)
 
-    print('use super::super::super::Regexp;')
+    print('use super::super::Regexp;')
     print('')
     for f in args.files:
         print('// Tests from %s' % path.basename(f))

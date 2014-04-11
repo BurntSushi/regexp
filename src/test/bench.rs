@@ -10,6 +10,14 @@ fn bench_assert_match(b: &mut BenchHarness, re: Regexp, text: &str) {
 }
 
 #[bench]
+fn no_exponential(b: &mut BenchHarness) {
+    let n = 100;
+    let re = Regexp::new("a?".repeat(n) + "a".repeat(n)).unwrap();
+    let text = "a".repeat(n);
+    bench_assert_match(b, re, text);
+}
+
+#[bench]
 fn literal(b: &mut BenchHarness) {
     let re = Regexp::new("y").unwrap();
     let text = "x".repeat(50) + "y";

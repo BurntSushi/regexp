@@ -24,23 +24,22 @@ use super::vm::CapturePairs;
 /// ```
 ///
 /// You can also use the `re!` macro to compile a regular expression when
-/// you compile your program. That is, an incorrect expression will cause
-/// the Rust compiler to produce a compile time error.
+/// you compile your program:
 ///
 /// ```rust
 /// #![feature(phase)]
 /// extern crate regexp;
 /// #[phase(syntax)] extern crate regexp_re;
 ///
-/// static global: regexp::Regexp = re!(r"\d+");
-///
 /// fn main() {
-///     static local: regexp::Regexp = re!(r"\d+");
-///     assert_eq!(global.find("123 abc"), Some((0, 3)));
-///     assert_eq!(local.find("123 abc"), Some((0, 3)));
+///     static re: regexp::Regexp = re!(r"\d+");
+///     assert_eq!(re.find("123 abc"), Some((0, 3)));
 /// }
 /// ```
 ///
+/// `re!` can also be declared with `static` in a module scope.
+/// Given an incorrect regular expression, `re!` will cause the Rust compiler 
+/// to produce a compile time error.
 /// More details about the `re!` macro can be found in the `regexp` crate
 /// documentation.
 pub struct Regexp {

@@ -5,8 +5,7 @@ RUSTFLAGS ?= --opt-level=3
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
 SRC_FILES = src/lib.rs src/parse.rs src/compile.rs src/vm.rs \
 						src/unicode.rs src/regexp.rs src/macro.rs \
-						src/test/mod.rs src/test/test.rs \
-						src/test/matches.rs src/test/bench.rs \
+						src/test/mod.rs src/test/matches.rs src/test/bench.rs \
 						src/test/macro.rs
 
 compile:

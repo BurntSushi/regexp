@@ -1,4 +1,4 @@
-use super::super::super::Regexp;
+use super::super::Regexp;
 
 // Tests from basic.dat
 mat!(match_basic_3, r"abracadabra$", r"abracadabracadabra", Some((7, 18)))
