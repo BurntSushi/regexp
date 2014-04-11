@@ -14,12 +14,9 @@ extern crate syntax;
 use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
 use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
 use syntax::codemap::{Span, DUMMY_SP};
-use syntax::ext::base::{SyntaxExtension,
-                        ExtCtxt,
-                        MacResult,
-                        MRExpr,
-                        NormalTT,
-                        BasicMacroExpander};
+use syntax::ext::base::{
+    SyntaxExtension, ExtCtxt, MacResult, MRExpr, NormalTT, BasicMacroExpander,
+};
 use syntax::parse;
 use syntax::parse::token;
 use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
@@ -80,6 +77,11 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     ))
 }
 
+// This trait is defined in the quote module in the syntax crate, but I
+// don't think it's exported.
+// Interestingly, quote_expr! only requires that a 'to_tokens' method be
+// defined rather than satisfying a particular trait.
+// I think these should be included in the `syntax` crate anyway.
 #[doc(hidden)]
 trait ToTokens {
     fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
