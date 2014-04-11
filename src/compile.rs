@@ -39,34 +39,33 @@ pub enum Inst {
     Match,
 
     // The OneChar instruction matches a literal character.
-    // If the bool is true, then the match is done case insensitively.
+    // The flags indicate whether to do a case insensitive match.
     OneChar(char, Flags),
 
     // The CharClass instruction tries to match one input character against
     // the range of characters given.
-    // If the first bool is true, then the character class is negated.
-    // If the second bool is true, then the character class is matched
-    // case insensitively.
+    // The flags indicate whether to do a case insentivie match and whether
+    // the character class is negated or not.
     CharClass(MaybeStatic<(char, char)>, Flags),
 
     // Matches any character except new lines.
-    // If the bool is true, then new lines are matched.
+    // The flags indicate whether to include the '\n' character.
     Any(Flags),
 
     // Matches the beginning of the string, consumes no characters.
-    // If the bool is true, then it also matches when the preceding character
+    // The flags indicate whether it matches if the preceding character
     // is a new line.
     EmptyBegin(Flags),
 
     // Matches the end of the string, consumes no characters.
-    // If the bool is true, then it also matches when the proceeding character
+    // The flags indicate whether it matches if the proceding character
     // is a new line.
     EmptyEnd(Flags),
 
     // Matches a word boundary (\w on one side and \W \A or \z on the other),
     // and consumes no character.
-    // If the bool is false, then it matches anything that is NOT a word
-    // boundary.
+    // The flags indicate whether this matches a word boundary or something
+    // that isn't a word boundary.
     EmptyWordBoundary(Flags),
 
     // Saves the current position in the input string to the Nth save slot.
@@ -81,6 +80,12 @@ pub enum Inst {
     Split(InstIdx, InstIdx),
 }
 
+/// Program represents a compiled regular expression. Once an expression is
+/// compiled, its representation is immutable and will never change.
+///
+/// All of the data in a compiled expression is wrapped in "MaybeStatic" or
+/// "MaybeOwned" types so that a `Program` can be represented as static data.
+/// (This makes it convenient and efficient for use with the `re!` macro.)
 pub struct Program {
     pub regex: MaybeOwned<'static>,
     pub insts: MaybeStatic<Inst>,
@@ -140,6 +145,10 @@ struct Compiler<'r> {
     names: Vec<Option<MaybeOwned<'r>>>,
 }
 
+// The compiler implemented here is extremely simple. Most of the complexity
+// in this crate is in the parser or the VM.
+// The only tricky thing here is patching jump/split instructions to point to
+// the right instruction.
 impl<'r> Compiler<'r> {
     fn compile(&mut self, ast: ~parse::Ast) {
         match ast {
