@@ -166,7 +166,9 @@ impl<'r, 't> Nfa<'r, 't> {
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.step(groups.as_mut_slice(), nlist, clist.groups(i), pc) {
+                let step_state = self.step(groups.as_mut_slice(), nlist,
+                                           clist.groups(i), pc);
+                match step_state {
                     StepMatchEarlyReturn => return vec!(Some(0), Some(0)),
                     StepMatch => { matched = true; clist.empty() },
                     StepContinue => {},

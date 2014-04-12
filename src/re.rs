@@ -152,7 +152,8 @@ impl Regexp {
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter` (except it
     /// yields capture groups and not positions).
-    pub fn captures_iter<'r, 't>(&'r self, text: &'t str) -> FindCaptures<'r, 't> {
+    pub fn captures_iter<'r, 't>(&'r self, text: &'t str)
+                                -> FindCaptures<'r, 't> {
         FindCaptures {
             re: self,
             search: SearchText::from_str(text, Submatches),

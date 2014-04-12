@@ -126,10 +126,10 @@ fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
 fn char_class_to_expr(cx: &mut ExtCtxt, sp: Span,
                       ranges: &MaybeStatic<(char, char)>,
                       flags: Flags) -> @Expr {
-    let ranges = as_expr_vec_static(cx, sp, ranges.as_slice(),
+    let rs = as_expr_vec_static(cx, sp, ranges.as_slice(),
         |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
     quote_expr!(&*cx,
-        ::regexp::program::CharClass(::regexp::program::Static($ranges), $flags))
+        ::regexp::program::CharClass(::regexp::program::Static($rs), $flags))
 }
 
 fn as_expr_vec_static<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
