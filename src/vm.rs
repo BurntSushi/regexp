@@ -113,6 +113,14 @@ impl<'r, 't> Nfa<'r, 't> {
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
+        // Determine if the expression starts with a '^' so we can avoid
+        // simulating .*?
+        let prefix_anchor = 
+            match self.insts[1] {
+                EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
+                _ => false,
+            };
+
         self.ic = self.start;
         let mut next_ic = self.chars.set(self.start);
         while self.ic <= self.end {
@@ -145,7 +153,7 @@ impl<'r, 't> Nfa<'r, 't> {
             // This simulates a preceding '.*?' for every regex by adding
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
-            if !matched {
+            if clist.size == 0 || (!prefix_anchor && !matched) {
                 self.add(clist, 0, groups.as_mut_slice())
             }
 
