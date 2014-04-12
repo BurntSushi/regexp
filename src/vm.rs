@@ -73,14 +73,12 @@ pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
 /// by the time the VM is done executing. (Otherwise there is a bug in the VM.)
 fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
     let mut caps = Vec::with_capacity(locs.len() / 2);
-    let mut i = 0;
-    while i < locs.len() {
-        match (*locs.get(i), *locs.get(i+1)) {
+    for win in locs.as_slice().chunks(2) {
+        match (win[0], win[1]) {
             (Some(s), Some(e)) => caps.push(Some((s, e))),
             (None, None) => caps.push(None),
             wins => fail!("BUG: Invalid capture group: {}", wins),
         }
-        i += 2;
     }
     caps
 }
@@ -513,13 +511,11 @@ fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
         if hayi > haystack.len() - needle.len() {
             break
         }
-        let mut nedi = 0u;
-        while nedi < needle.len() {
+        for nedi in ::std::iter::range(0, needle.len()) {
             if haystack[hayi+nedi] != needle[nedi] {
                 hayi += 1;
                 continue 'HAYSTACK
             }
-            nedi += 1;
         }
         return Some(hayi)
     }
