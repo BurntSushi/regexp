@@ -49,7 +49,7 @@ fn match_class_in_range(b: &mut Bencher) {
 #[bench]
 fn replace_all(b: &mut Bencher) {
     let re = Regexp::new("[cjrw]").unwrap();
-	let text = "abcdefghijklmnopqrstuvwxyz";
+    let text = "abcdefghijklmnopqrstuvwxyz";
     // FIXME: This isn't using the $name expand stuff.
     // It's possible RE2/Go is using it, but currently, the expand in this
     // crate is actually compiling a regex, so it's incredibly slow.
