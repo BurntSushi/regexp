@@ -23,6 +23,7 @@
 
 use std::cmp;
 use std::mem;
+use std::slice::MutableVector;
 use super::compile::{
     Program, Inst,
     Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
@@ -51,9 +52,12 @@ pub fn run<'r, 't>(prog: &'r Program, input: &'t str, caps: bool,
         start: start,
         end: end,
         ic: 0,
-        prev: None,
-        cur: None,
-        next: None,
+        chars: CharReader {
+            input: input,
+            prev: None,
+            cur: None,
+            next: 0,
+        },
     }.run())
 }
 
@@ -81,9 +85,7 @@ struct Nfa<'r, 't> {
     start: uint,
     end: uint,
     ic: uint,
-    prev: Option<char>,
-    cur: Option<char>,
-    next: Option<char>,
+    chars: CharReader<'t>,
 }
 
 enum StepState {
@@ -101,7 +103,7 @@ impl<'r, 't> Nfa<'r, 't> {
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
         self.ic = self.start;
-        let mut next_ic = self.set_chars(self.start);
+        let mut next_ic = self.chars.set(self.start);
         while self.ic <= self.end {
             if clist.size == 0 {
                 // We have a match and we're done exploring alternatives.
@@ -122,10 +124,7 @@ impl<'r, 't> Nfa<'r, 't> {
                         None => return Vec::from_elem(num_caps * 2, None),
                         Some(i) => {
                             self.ic += i;
-                            next_ic = self.set_chars(self.ic);
-                            // println!("LITERAL MATCHED: {} :: {}", self.ic, i); 
-                            // println!("needle: {}, haystack: {}", 
-                                     // needle, haystack); 
+                            next_ic = self.chars.set(self.ic);
                         }
                     }
                 }
@@ -142,12 +141,12 @@ impl<'r, 't> Nfa<'r, 't> {
             // As a result, the 'step' method will look at the previous
             // character.
             self.ic = next_ic;
-            next_ic = self.set_chars(next_ic);
+            next_ic = self.chars.swap();
 
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.step(&mut groups, nlist, clist.groups(i), pc) {
+                match self.step(groups.as_mut_slice(), nlist, clist.groups(i), pc) {
                     StepMatchEarlyReturn => return groups,
                     StepMatch => clist.empty(),
                     StepContinue => {},
@@ -160,7 +159,7 @@ impl<'r, 't> Nfa<'r, 't> {
         groups
     }
 
-    fn step(&self, groups: &mut CaptureLocs, nlist: &mut Threads,
+    fn step(&self, groups: &mut [Option<uint>], nlist: &mut Threads,
             caps: &mut [Option<uint>], pc: uint)
            -> StepState {
         match self.insts[pc] {
@@ -172,26 +171,22 @@ impl<'r, 't> Nfa<'r, 't> {
                     // We can bail out super early since we don't
                     // care about matching leftmost-longest.
                     // return vec!(Some(0), Some(0)) 
-                    *groups.get_mut(0) = Some(0);
-                    *groups.get_mut(1) = Some(0);
+                    groups[0] = Some(0);
+                    groups[1] = Some(0);
                     return StepMatchEarlyReturn
                 } else {
-                    let mut i = 0;
-                    while i < groups.len() {
-                        *groups.get_mut(i) = caps[i];
-                        i += 1;
-                    }
+                    unsafe { groups.copy_memory(caps) }
                     return StepMatch
                 }
             }
             OneChar(c, flags) => {
-                if self.char_eq(flags & FLAG_NOCASE > 0, self.prev, c) {
+                if self.char_eq(flags & FLAG_NOCASE > 0, self.chars.prev, c) {
                     self.add(nlist, pc+1, caps);
                 }
             }
             CharClass(ref ranges, flags) => {
-                if self.prev.is_some() {
-                    let c = self.prev.unwrap();
+                if self.chars.prev.is_some() {
+                    let c = self.chars.prev.unwrap();
                     let negate = flags & FLAG_NEGATED > 0;
                     let casei = flags & FLAG_NOCASE > 0;
                     let found = ranges.as_slice();
@@ -203,7 +198,8 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
             }
             Any(flags) => {
-                if flags & FLAG_DOTNL > 0 || !self.char_eq(false, self.prev, '\n') {
+                if flags & FLAG_DOTNL > 0
+                   || !self.char_eq(false, self.chars.prev, '\n') {
                     self.add(nlist, pc+1, caps)
                 }
             }
@@ -235,14 +231,16 @@ impl<'r, 't> Nfa<'r, 't> {
             EmptyBegin(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
-                if self.is_begin() || (multi && self.char_is(self.prev, '\n')) {
+                if self.is_begin()
+                   || (multi && self.char_is(self.chars.prev, '\n')) {
                     self.add(nlist, pc + 1, groups)
                 }
             }
             EmptyEnd(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
-                if self.is_end() || (multi && self.char_is(self.cur, '\n')) {
+                if self.is_end()
+                   || (multi && self.char_is(self.chars.cur, '\n')) {
                     self.add(nlist, pc + 1, groups)
                 }
             }
@@ -282,22 +280,18 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    fn is_begin(&self) -> bool { self.prev.is_none() }
-    fn is_end(&self) -> bool {
-        // println!("ic: {}, prev: {}, cur: {}, next: {}", 
-                 // self.ic, self.prev, self.cur, self.next); 
-        self.cur.is_none()
-    }
+    fn is_begin(&self) -> bool { self.chars.prev.is_none() }
+    fn is_end(&self) -> bool { self.chars.cur.is_none() }
 
     fn is_word_boundary(&self) -> bool {
         if self.is_begin() {
-            return self.is_word(self.cur)
+            return self.is_word(self.chars.cur)
         }
         if self.is_end() {
-            return self.is_word(self.prev)
+            return self.is_word(self.chars.prev)
         }
-        (self.is_word(self.cur) && !self.is_word(self.prev))
-        || (self.is_word(self.prev) && !self.is_word(self.cur))
+        (self.is_word(self.chars.cur) && !self.is_word(self.chars.prev))
+        || (self.is_word(self.chars.prev) && !self.is_word(self.chars.cur))
     }
 
     fn is_word(&self, c: Option<char>) -> bool {
@@ -328,10 +322,45 @@ impl<'r, 't> Nfa<'r, 't> {
         textc == Some(regc)
     }
 
-    fn set_chars(&mut self, ic: uint) -> uint {
+    // fn swap_chars(&mut self, ic: uint) -> uint { 
+        // self.prev = self.cur; 
+        // self.cur = self.next; 
+        // if ic + self.ic < self.input.len() { 
+            // let next = self.input.char_range_at(ic); 
+            // self.next = Some(next.ch); 
+        // } else { 
+            // self.next = None; 
+        // } 
+        // cur.next 
+    // } 
+}
+
+struct CharReader<'r> {
+    input: &'r str,
+    prev: Option<char>,
+    cur: Option<char>,
+    next: uint,
+}
+
+impl<'r> CharReader<'r> {
+    fn swap(&mut self) -> uint {
+        self.prev = self.cur;
+        if self.next < self.input.len() {
+            let cur = self.input.char_range_at(self.next);
+            self.cur = Some(cur.ch);
+            self.next = cur.next;
+        } else {
+            self.cur = None;
+            self.next = self.input.len() + 1;
+        }
+        self.next
+    }
+
+    fn set(&mut self, ic: uint) -> uint {
         self.prev = None;
         self.cur = None;
-        self.next = None;
+        self.next = 0;
+
         if self.input.len() == 0 {
             return 0 + 1
         }
@@ -343,11 +372,8 @@ impl<'r, 't> Nfa<'r, 't> {
         if ic < self.input.len() {
             let cur = self.input.char_range_at(ic);
             self.cur = Some(cur.ch);
-            if ic + cur.next < self.input.len() {
-                let next = self.input.char_range_at(cur.next);
-                self.next = Some(next.ch);
-            }
-            cur.next
+            self.next = cur.next;
+            self.next
         } else {
             self.input.len() + 1
         }
@@ -393,11 +419,7 @@ impl Threads {
         let t = self.queue.get_mut(self.size);
         t.pc = pc;
         if !empty {
-            let mut i = 0;
-            while i < groups.len() {
-                *t.groups.get_mut(i) = groups[i];
-                i += 1;
-            }
+            unsafe { t.groups.as_mut_slice().copy_memory(groups) }
         }
         *self.sparse.get_mut(pc) = self.size;
         self.size += 1;
