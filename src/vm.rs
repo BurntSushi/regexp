@@ -48,7 +48,7 @@ pub enum MatchKind {
 /// Note that if 'caps' is false, the capture indices returned will always be
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
-pub fn run<'r, 't>(prog: &'r Program, input: &'t str, which: MatchKind,
+pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
                    start: uint, end: uint) -> CapturePairs {
     unflatten_capture_locations(Nfa {
         which: which,
@@ -341,14 +341,14 @@ impl<'r, 't> Nfa<'r, 't> {
 /// CharReader is responsible for maintaining a "previous" and a "current"
 /// character. This one-character lookahead is necessary for assertions that
 /// look one character before or after the current position.
-struct CharReader<'r> {
-    input: &'r str,
+struct CharReader<'t> {
+    input: &'t str,
     prev: Option<char>,
     cur: Option<char>,
     next: uint,
 }
 
-impl<'r> CharReader<'r> {
+impl<'t> CharReader<'t> {
     // Sets the previous and current character given any arbitrary byte
     // index (at a unicode codepoint boundary).
     fn set(&mut self, ic: uint) -> uint {

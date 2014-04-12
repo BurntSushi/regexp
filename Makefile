@@ -29,7 +29,7 @@ match-tests:
 unicode-tables:
 	./make-unicode-tables > ./src/unicode.rs
 
-docs: $(SRCFILES)
+docs: $(SRC_FILES)
 	rm -rf doc
 	$(RUSTDOC) -L $(RUST_PATH) --test ./src/lib.rs
 	$(RUSTDOC) -L $(RUST_PATH) ./src/lib.rs

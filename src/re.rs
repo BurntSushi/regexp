@@ -10,6 +10,9 @@ use super::vm::{CapturePairs, MatchKind, Exists, Location, Submatches};
 /// Regexp is a compiled regular expression. It can be used to search, split
 /// or replace text.
 ///
+/// The lifetimes `'r` and `'t` in this crate correspond to the lifetime of a 
+/// compiled regular expression and text to search, respectively.
+///
 /// # Examples
 ///
 /// Find the location of a phone number:
@@ -55,6 +58,8 @@ pub struct Regexp {
 impl Regexp {
     /// Creates a new compiled regular expression. Once compiled, it can be
     /// used repeatedly to search, split or replace text in a string.
+    ///
+    /// If an invalid expression is given, then an error is returned.
     pub fn new(regex: &str) -> Result<Regexp, Error> {
         let ast = try!(parse(regex));
         Ok(Regexp { p: Program::new(regex, ast) })
@@ -178,7 +183,7 @@ impl Regexp {
     ///
     /// # Examples
     ///
-    /// Note that this function in polymorphic with respect to the replacement.
+    /// Note that this function is polymorphic with respect to the replacement.
     /// In typical usage, this can just be a normal string:
     ///
     /// ```rust
@@ -226,7 +231,7 @@ impl Regexp {
     /// would produce the same result. To write a literal `$` use `$$`.
     ///
     /// Finally, sometimes you just want to replace a literal string with no
-    /// fancy submatch expansion. This can be done by wraping a string with
+    /// submatch expansion. This can be done by wrapping a string with
     /// `NoExpand`:
     ///
     /// ```rust
@@ -286,59 +291,38 @@ impl Regexp {
 /// It can be used with `replace` and `replace_all` to do a literal
 /// string replacement without expanding `$name` to their corresponding
 /// capture groups.
-pub struct NoExpand<'r>(pub &'r str);
-
-/// Expands all instances of `$name` in `text` to the corresponding capture
-/// group `name`.
 ///
-/// `name` may be an integer corresponding to the index of the
-/// capture group (counted by order of opening parenthesis where `0` is the
-/// entire match) or it can be a name (consisting of letters, digits or 
-/// underscores) corresponding to a named capture group.
-///
-/// If `name` isn't a valid capture group (whether the name doesn't exist or
-/// isn't a valid index), then it is replaced with the empty string.
-///
-/// To write a literal `$` use `$$`.
-pub fn expand(caps: &Captures, text: &str) -> ~str {
-    // How evil can you get?
-    // FIXME: Don't use regexes for this. It's completely unnecessary.
-    let re = Regexp::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
-    let text = re.replace_all(text, |refs: &Captures| -> ~str {
-        let (pre, name) = (refs.at(1), refs.at(2));
-        pre + match from_str::<uint>(name) {
-            None => caps.name(name).to_owned(),
-            Some(i) => caps.at(i).to_owned(),
-        }
-    });
-    text.replace("$$", "$")
-}
+/// `'r` is the lifetime of the literal text.
+pub struct NoExpand<'t>(pub &'t str);
 
 /// Replacer describes types that can be used to replace matches in a string.
 pub trait Replacer {
     fn reg_replace(&self, caps: &Captures) -> ~str;
 }
 
-impl<'r> Replacer for NoExpand<'r> {
+impl<'t> Replacer for NoExpand<'t> {
     fn reg_replace(&self, _: &Captures) -> ~str {
         let NoExpand(s) = *self;
         s.to_owned()
     }
 }
 
-impl<'r> Replacer for &'r str {
+impl<'t> Replacer for &'t str {
     fn reg_replace(&self, caps: &Captures) -> ~str {
-        expand(caps, *self)
+        caps.expand(*self)
     }
 }
 
-impl<'r> Replacer for |&Captures|: 'r -> ~str {
+impl<'a> Replacer for |&Captures|: 'a -> ~str {
     fn reg_replace(&self, caps: &Captures) -> ~str {
         (*self)(caps)
     }
 }
 
 /// Yields all substrings delimited by a regular expression match.
+///
+/// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
+/// of the string being split.
 pub struct RegexpSplits<'r, 't> {
     finder: FindMatches<'r, 't>,
     text: &'t str,
@@ -369,6 +353,9 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
 /// Yields at most `N` substrings delimited by a regular expression match.
 ///
 /// The last substring will be whatever remains after splitting.
+///
+/// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
+/// of the string being split.
 pub struct RegexpSplitsN<'r, 't> {
     splits: RegexpSplits<'r, 't>,
     cur: uint,
@@ -398,6 +385,8 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 /// If a capture group is named, then the matched string is *also* available
 /// via the `name` method. (Note that the 0th capture is always unnamed and so
 /// must be accessed with the `at` method.)
+///
+/// `'t` is the lifetime of the matched text.
 pub struct Captures<'t> {
     text: &'t str,
     locs: CapturePairs,
@@ -473,6 +462,32 @@ impl<'t> Captures<'t> {
     pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
         SubCapturesPos { idx: 0, caps: self, }
     }
+
+    /// Expands all instances of `$name` in `text` to the corresponding capture
+    /// group `name`.
+    ///
+    /// `name` may be an integer corresponding to the index of the
+    /// capture group (counted by order of opening parenthesis where `0` is the
+    /// entire match) or it can be a name (consisting of letters, digits or 
+    /// underscores) corresponding to a named capture group.
+    ///
+    /// If `name` isn't a valid capture group (whether the name doesn't exist or
+    /// isn't a valid index), then it is replaced with the empty string.
+    ///
+    /// To write a literal `$` use `$$`.
+    pub fn expand(&self, text: &str) -> ~str {
+        // How evil can you get?
+        // FIXME: Don't use regexes for this. It's completely unnecessary.
+        let re = Regexp::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
+        let text = re.replace_all(text, |refs: &Captures| -> ~str {
+            let (pre, name) = (refs.at(1), refs.at(2));
+            pre + match from_str::<uint>(name) {
+                None => self.name(name).to_owned(),
+                Some(i) => self.at(i).to_owned(),
+            }
+        });
+        text.replace("$$", "$")
+    }
 }
 
 impl<'t> Container for Captures<'t> {
@@ -483,6 +498,8 @@ impl<'t> Container for Captures<'t> {
 
 /// An iterator over capture groups for a particular match of a regular
 /// expression.
+///
+/// `'t` is the lifetime of the matched text.
 pub struct SubCaptures<'t> {
     idx: uint,
     caps: &'t Captures<'t>,
@@ -503,6 +520,8 @@ impl<'t> Iterator<&'t str> for SubCaptures<'t> {
 /// regular expression.
 ///
 /// Positions are byte indices in terms of the original string matched.
+///
+/// `'t` is the lifetime of the matched text.
 pub struct SubCapturesPos<'t> {
     idx: uint,
     caps: &'t Captures<'t>,
@@ -521,6 +540,9 @@ impl<'t> Iterator<Option<(uint, uint)>> for SubCapturesPos<'t> {
 
 /// An iterator that yields all non-overlapping capture groups matching a
 /// particular regular expression.
+///
+/// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
+/// of the matched string.
 pub struct FindCaptures<'r, 't> {
     re: &'r Regexp,
     search: SearchText<'t>,
@@ -561,6 +583,9 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
 ///
 /// The iterator yields a tuple of integers corresponding to the start and end
 /// of the match. The indices are byte offsets.
+///
+/// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
+/// of the matched string.
 pub struct FindMatches<'r, 't> {
     re: &'r Regexp,
     search: SearchText<'t>,
@@ -599,6 +624,8 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
 
 /// Provides a convenient interface to executing the VM on a string or
 /// a portion of the string.
+///
+/// `'t` is the lifetime of the search text.
 struct SearchText<'t> {
     text: &'t str,
     which: MatchKind,
@@ -610,11 +637,11 @@ impl<'t> SearchText<'t> {
     }
 
     fn exec(&self, re: &Regexp) -> CapturePairs {
-        vm::run(&re.p, self.text, self.which, 0, self.text.len())
+        vm::run(self.which, &re.p, self.text, 0, self.text.len())
     }
 
     fn exec_slice(&self, re: &Regexp, s: uint, e: uint) -> CapturePairs {
-        vm::run(&re.p, self.text, self.which, s, e)
+        vm::run(self.which, &re.p, self.text, s, e)
     }
 }
 

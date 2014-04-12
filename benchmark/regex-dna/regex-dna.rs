@@ -4,7 +4,7 @@
 extern crate regexp;
 extern crate sync;
 
-use regexp::{Regexp, NoExpand};
+use regexp::{NoExpand, regexp};
 use sync::Arc;
  
 static VARIANTS: &'static [&'static str] = &'static [
@@ -29,12 +29,11 @@ static SUBST: &'static [Subst<'static>] = &'static [
 ];
  
 fn replace(text: &str, regex: &str, rep: &str) -> ~str {
-    let re = Regexp::new(regex).unwrap();
-    re.replace_all(text, NoExpand(rep))
+    regexp(regex).replace_all(text, NoExpand(rep))
 }
  
 fn count_matches(seq: &str, variant: &str) -> int {
-    let re = Regexp::new(variant).unwrap();
+    let re = regexp(variant);
     let mut n = 0;
     for _ in re.find_iter(seq) {
         n += 1;
@@ -47,7 +46,7 @@ fn main() {
     let mut seq = stdin.read_to_str().unwrap();
     let ilen = seq.len();
  
-    seq = Regexp::new(">[^\n]*\n|\n").unwrap().replace_all(seq, NoExpand(""));
+    seq = regexp(">[^\n]*\n|\n").replace_all(seq, NoExpand(""));
     let seq_arc = Arc::new(seq.clone());
     let clen = seq.len();
  
