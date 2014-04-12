@@ -68,7 +68,7 @@ fn main() {
         seq.len()
     });
     for (i, variant) in VARIANTS.iter().enumerate() {
-        println!("{} {:?}", variant, counts.get_mut(i).get());
+        println!("{} {}", variant, counts.get_mut(i).get());
     }
     println!("");
     println!("{}", ilen);
