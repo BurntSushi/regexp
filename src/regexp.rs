@@ -5,7 +5,7 @@ use std::str;
 use super::compile::Program;
 use super::parse::{parse, Error};
 use super::vm;
-use super::vm::CapturePairs;
+use super::vm::{CapturePairs, MatchKind, Exists, Location, Submatches};
 
 /// Regexp is a compiled regular expression. It can be used to search, split
 /// or replace text.
@@ -62,7 +62,7 @@ impl Regexp {
 
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
-        has_match(&SearchText::from_str(text, false).exec(self))
+        has_match(&SearchText::from_str(text, Exists).exec(self))
     }
 
     /// Returns the start and end byte range of the leftmost-longest match in 
@@ -72,7 +72,7 @@ impl Regexp {
     /// of the match. Testing the existence of a match is faster if you use
     /// `is_match`.
     pub fn find(&self, text: &str) -> Option<(uint, uint)> {
-        let search = SearchText::from_str(text, true);
+        let search = SearchText::from_str(text, Location);
         *search.exec(self).get(0)
     }
 
@@ -82,7 +82,7 @@ impl Regexp {
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
         FindMatches {
             re: self,
-            search: SearchText::from_str(text, true),
+            search: SearchText::from_str(text, Location),
             last_end: 0,
             last_match: None,
         }
@@ -92,7 +92,7 @@ impl Regexp {
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
-        let search = SearchText::from_str(text, true);
+        let search = SearchText::from_str(text, Submatches);
         let caps = search.exec(self);
         Captures::new(self, &search, caps)
     }
@@ -103,7 +103,7 @@ impl Regexp {
     pub fn captures_iter<'r, 't>(&'r self, text: &'t str) -> FindCaptures<'r, 't> {
         FindCaptures {
             re: self,
-            search: SearchText::from_str(text, true),
+            search: SearchText::from_str(text, Submatches),
             last_match: None,
             last_end: 0,
         }
@@ -601,20 +601,20 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
 /// a portion of the string.
 struct SearchText<'t> {
     text: &'t str,
-    caps: bool,
+    which: MatchKind,
 }
 
 impl<'t> SearchText<'t> {
-    fn from_str(input: &'t str, caps: bool) -> SearchText<'t> {
-        SearchText { text: input, caps: caps }
+    fn from_str(input: &'t str, which: MatchKind) -> SearchText<'t> {
+        SearchText { text: input, which: which }
     }
 
     fn exec(&self, re: &Regexp) -> CapturePairs {
-        vm::run(&re.p, self.text, self.caps, 0, self.text.len())
+        vm::run(&re.p, self.text, self.which, 0, self.text.len())
     }
 
     fn exec_slice(&self, re: &Regexp, s: uint, e: uint) -> CapturePairs {
-        vm::run(&re.p, self.text, self.caps, s, e)
+        vm::run(&re.p, self.text, self.which, s, e)
     }
 }
 

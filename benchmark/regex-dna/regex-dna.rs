@@ -34,7 +34,7 @@ fn replace(text: &str, regex: &str, rep: &str) -> ~str {
 fn count_matches(seq: &str, variant: &str) -> int {
     let re = Regexp::new(variant).unwrap();
     let mut n = 0;
-    for _ in re.captures_iter(seq) {
+    for _ in re.find_iter(seq) {
         n += 1;
     }
     return n

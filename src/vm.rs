@@ -34,6 +34,12 @@ use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 pub type CapturePairs = Vec<Option<(uint, uint)>>;
 pub type CaptureLocs = Vec<Option<uint>>;
 
+pub enum MatchKind {
+    Exists,
+    Location,
+    Submatches,
+}
+
 /// Runs an NFA simulation on the list of instructions and input given. (The
 /// input must have been decoded into a slice of UTF8 characters.)
 /// If 'caps' is true, then capture groups are tracked. When false, capture
@@ -42,13 +48,13 @@ pub type CaptureLocs = Vec<Option<uint>>;
 /// Note that if 'caps' is false, the capture indices returned will always be
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
-pub fn run<'r, 't>(prog: &'r Program, input: &'t str, caps: bool,
+pub fn run<'r, 't>(prog: &'r Program, input: &'t str, which: MatchKind,
                    start: uint, end: uint) -> CapturePairs {
     unflatten_capture_locations(Nfa {
+        which: which,
         prog: prog,
         insts: prog.insts.as_slice(),
         input: input,
-        caps: caps,
         start: start,
         end: end,
         ic: 0,
@@ -78,10 +84,10 @@ fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
 }
 
 struct Nfa<'r, 't> {
+    which: MatchKind,
     prog: &'r Program,
     insts: &'r [Inst],
     input: &'t str,
-    caps: bool,
     start: uint,
     end: uint,
     ic: uint,
@@ -96,9 +102,14 @@ enum StepState {
 
 impl<'r, 't> Nfa<'r, 't> {
     fn run(&mut self) -> CaptureLocs {
-        let num_caps = self.prog.num_captures();
-        let clist = &mut Threads::new(self.insts.len(), num_caps);
-        let nlist = &mut Threads::new(self.insts.len(), num_caps);
+        let num_caps = match self.which {
+            Exists => 0,
+            Location => 1,
+            Submatches => self.prog.num_captures(),
+        };
+        let mut matched = false;
+        let clist = &mut Threads::new(self.which, self.insts.len(), num_caps);
+        let nlist = &mut Threads::new(self.which, self.insts.len(), num_caps);
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
@@ -108,7 +119,7 @@ impl<'r, 't> Nfa<'r, 't> {
             if clist.size == 0 {
                 // We have a match and we're done exploring alternatives.
                 // Time to quit.
-                if groups.get(0).is_some() {
+                if matched {
                     break
                 }
 
@@ -121,7 +132,8 @@ impl<'r, 't> Nfa<'r, 't> {
                     let needle = self.prog.prefix.as_slice().as_bytes();
                     let haystack = self.input.as_bytes().slice_from(self.ic);
                     match find_prefix(needle, haystack) {
-                        None => return Vec::from_elem(num_caps * 2, None),
+                        // None => return Vec::from_elem(num_caps * 2, None), 
+                        None => break,
                         Some(i) => {
                             self.ic += i;
                             next_ic = self.chars.set(self.ic);
@@ -133,7 +145,7 @@ impl<'r, 't> Nfa<'r, 't> {
             // This simulates a preceding '.*?' for every regex by adding
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
-            if groups.get(0).is_none() {
+            if !matched {
                 self.add(clist, 0, groups.as_mut_slice())
             }
 
@@ -147,8 +159,8 @@ impl<'r, 't> Nfa<'r, 't> {
             while i < clist.size {
                 let pc = clist.pc(i);
                 match self.step(groups.as_mut_slice(), nlist, clist.groups(i), pc) {
-                    StepMatchEarlyReturn => return groups,
-                    StepMatch => clist.empty(),
+                    StepMatchEarlyReturn => return vec!(Some(0), Some(0)),
+                    StepMatch => { matched = true; clist.empty() },
                     StepContinue => {},
                 }
                 i += 1;
@@ -156,7 +168,11 @@ impl<'r, 't> Nfa<'r, 't> {
             mem::swap(clist, nlist);
             nlist.empty();
         }
-        groups
+        match self.which {
+            Exists if matched     => vec!(Some(0), Some(0)),
+            Exists                => vec!(None, None),
+            Location | Submatches => groups,
+        }
     }
 
     fn step(&self, groups: &mut [Option<uint>], nlist: &mut Threads,
@@ -164,19 +180,19 @@ impl<'r, 't> Nfa<'r, 't> {
            -> StepState {
         match self.insts[pc] {
             Match => {
-                if !self.caps {
-                    // This is a terrible hack that is used to
-                    // indicate a match when the caller doesn't want
-                    // any capture groups.
-                    // We can bail out super early since we don't
-                    // care about matching leftmost-longest.
-                    // return vec!(Some(0), Some(0)) 
-                    groups[0] = Some(0);
-                    groups[1] = Some(0);
-                    return StepMatchEarlyReturn
-                } else {
-                    unsafe { groups.copy_memory(caps) }
-                    return StepMatch
+                match self.which {
+                    Exists => {
+                        return StepMatchEarlyReturn
+                    }
+                    Location => {
+                        groups[0] = caps[0];
+                        groups[1] = caps[1];
+                        return StepMatch
+                    }
+                    Submatches => {
+                        unsafe { groups.copy_memory(caps) }
+                        return StepMatch
+                    }
                 }
             }
             OneChar(c, flags) => {
@@ -252,13 +268,14 @@ impl<'r, 't> Nfa<'r, 't> {
             }
             Save(slot) => {
                 nlist.add(pc, groups, true);
-                if !self.caps {
-                    self.add(nlist, pc + 1, groups);
-                } else {
-                    let old = groups[slot];
-                    groups[slot] = Some(self.ic);
-                    self.add(nlist, pc + 1, groups);
-                    groups[slot] = old;
+                match self.which {
+                    Exists => self.add(nlist, pc + 1, groups),
+                    Location | Submatches => {
+                        let old = groups[slot];
+                        groups[slot] = Some(self.ic);
+                        self.add(nlist, pc + 1, groups);
+                        groups[slot] = old;
+                    }
                 }
             }
             Jump(to) => {
@@ -271,11 +288,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 self.add(nlist, y, groups);
             }
             Match | OneChar(_, _) | CharClass(_, _) | Any(_) => {
-                // If captures are enabled, then we need to indicate that
-                // this isn't an empty state.
-                // Otherwise, we say it's an empty state (even though it isn't)
-                // so that capture groups aren't copied.
-                nlist.add(pc, groups, !self.caps);
+                nlist.add(pc, groups, false);
             }
         }
     }
@@ -321,18 +334,6 @@ impl<'r, 't> Nfa<'r, 't> {
     fn char_is(&self, textc: Option<char>, regc: char) -> bool {
         textc == Some(regc)
     }
-
-    // fn swap_chars(&mut self, ic: uint) -> uint { 
-        // self.prev = self.cur; 
-        // self.cur = self.next; 
-        // if ic + self.ic < self.input.len() { 
-            // let next = self.input.char_range_at(ic); 
-            // self.next = Some(next.ch); 
-        // } else { 
-            // self.next = None; 
-        // } 
-        // cur.next 
-    // } 
 }
 
 struct CharReader<'r> {
@@ -392,6 +393,7 @@ impl Thread {
 }
 
 struct Threads {
+    which: MatchKind,
     queue: Vec<Thread>,
     sparse: Vec<uint>,
     size: uint,
@@ -405,8 +407,9 @@ impl Threads {
     // the execution of a VM.
     //
     // See http://research.swtch.com/sparse for the deets.
-    fn new(num_insts: uint, num_caps: uint) -> Threads {
+    fn new(which: MatchKind, num_insts: uint, num_caps: uint) -> Threads {
         Threads {
+            which: which,
             queue: Vec::from_fn(num_insts, |_| {
                 Thread::new(0, Vec::from_elem(num_caps * 2, None))
             }),
@@ -418,8 +421,15 @@ impl Threads {
     fn add(&mut self, pc: uint, groups: &[Option<uint>], empty: bool) {
         let t = self.queue.get_mut(self.size);
         t.pc = pc;
-        if !empty {
-            unsafe { t.groups.as_mut_slice().copy_memory(groups) }
+        match (empty, self.which) {
+            (_, Exists) | (true, _) => {},
+            (false, Location) => {
+                *t.groups.get_mut(0) = groups[0];
+                *t.groups.get_mut(1) = groups[1];
+            }
+            (false, Submatches) => unsafe {
+                t.groups.as_mut_slice().copy_memory(groups)
+            }
         }
         *self.sparse.get_mut(pc) = self.size;
         self.size += 1;

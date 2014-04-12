@@ -18,9 +18,9 @@ Then run the Rust benchmark:
 ```
 [andrew@Liger regex-dna] make bench-rust
 ...
-real    0m37.916s
-user    0m37.457s
-sys     0m0.457s
+real    0m36.026s
+user    0m35.553s
+sys     0m0.470s
 ```
 
 And now the Go benchmark:
