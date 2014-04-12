@@ -4,7 +4,157 @@
 #![license = "UNLICENSE"]
 #![doc(html_root_url = "http://burntsushi.net/rustdoc/regexp")]
 
-//! Regular expressions for Rust.
+//! This crate provides a native implementation of regular expressions that is
+//! heavily based on RE2 both in syntax and in implementation. Notably,
+//! backreferences and arbitrary lookahead/lookbehind assertions are not
+//! provided. In return, regular expression searching provided by this package
+//! has excellent worst case performance. The specific syntax supported is 
+//! documented further down.
+//!
+//! # Syntax
+//!
+//! The syntax supported in this crate is almost in an exact correspondence 
+//! with the syntax supported by RE2.
+//!
+//! ## Matching one character
+//!
+//! <pre class="rust">
+//! .           any character except new line (includes new line with 's' flag)
+//! [xyz]       A character class matching either x, y or z.
+//! [^xyz]      A character class matching any character except x, y and z.
+//! [a-z]       A character class matching any character in range a-z.
+//! \d          Perl character class ([0-9])
+//! \D          Negated Perl character class ([^0-9])
+//! [:alpha:]   ASCII character class ([A-Za-z])
+//! [:^alpha:]  Negated ASCII character class ([^A-Za-z])
+//! \pN         One letter name Unicode character class
+//! \p{Greek}   Unicode character class (general category or script)
+//! \PN         Negated one letter name Unicode character class
+//! \P{Greek}   negated Unicode character class (general category or script)
+//! </pre>
+//!
+//! Any named character class may appear inside a bracketed `[...]` character
+//! class. For example, `[\p{Greek}\pN]` matches any Greek or numeral 
+//! character.
+//!
+//! ## Composites
+//!
+//! <pre class="rust">
+//! xy    concatenation (x followed by y)
+//! x|y   alternation (x or y, prefer x)
+//! </pre>
+//!
+//! ## Repetitions
+//!
+//! <pre class="rust">
+//! x*        zero or more of x (greedy)
+//! x+        one or more of x (greedy)
+//! x?        zero or one of x (greedy)
+//! x*?       zero or more of x (ungreedy)
+//! x+?       one or more of x (ungreedy)
+//! x??       zero or one of x (ungreedy)
+//! x{n,m}    at least n and at most x (greedy)
+//! x{n,}     at least n x (greedy)
+//! x{n}      exactly n x
+//! x{n,m}?   at least n and at most x (ungreedy)
+//! x{n,}?    at least n x (ungreedy)
+//! x{n}?     exactly n x
+//! </pre>
+//!
+//! ## Empty matches
+//!
+//! <pre class="rust">
+//! ^     the beginning of text
+//! $     the end of text
+//! \A    the beginning of text (even with multi-line mode enabled)
+//! \z    the end of text (even with multi-line mode enabled)
+//! \b    an ASCII word boundary (\w on one size and \W, \A, or \z on other)
+//! \B    not an ASCII word boundary
+//! </pre>
+//!
+//! ## Grouping and flags
+//!
+//! <pre class="rust">
+//! (exp)          numbered capture group (indexed by opening parenthesis)
+//! (?P&lt;name&gt;exp)  named capture group (also numbered)
+//! (?:exp)        non-capturing group
+//! (?flags)       set flags within current group
+//! (?flags:exp)   set flags for exp (non-capturing)
+//! </pre>
+//!
+//! Flags are each a single character. For example, `(?x)` sets the flag `x`
+//! and `(?-x)` clears the flag `x`. Multiple flags can be set or cleared at
+//! the same time: `(?xy)` sets both the `x` and `y` flags and `(?x-y)` sets 
+//! the `x` flag and clears the `y` flag.
+//!
+//! All flags are by default disabled. They are:
+//!
+//! <pre class="rust">
+//! i     case insensitive
+//! m     multi-line mode: ^ and $ match begin/end of line
+//! s     allow . to match \n
+//! U     swap the meaning of `x*` and `x*?`
+//! </pre>
+//!
+//! Here's an example that matches case insensitively for only part of the 
+//! expression:
+//!
+//! ```rust
+//! # #![feature(phase)]
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # use regexp::Regexp; fn main() {
+//! static re: Regexp = re!(r"(?i)a+(?-i)b+");
+//! assert_eq!(re.find("AaAaAbbBBBb"), Some((0, 7)));
+//! # }
+//! ```
+//!
+//! Notice that the `a+` matches either `a` or `A`, but the `b+` only matches
+//! `b`.
+//!
+//! ## Escape sequences
+//!
+//! <pre class="rust">
+//! \*         literal *, works for any punctuation character: \.+*?()|[]{}^$
+//! \a         bell (\x07)
+//! \f         form feed (\x0C)
+//! \t         horizontal tab
+//! \n         new line
+//! \r         carriage return
+//! \v         vertical tab (\x0B)
+//! \123       octal character code (up to three digits)
+//! \x7F       hex character code (exactly two digits)
+//! \x{10FFFF} any hex character code corresponding to a valid UTF8 codepoint
+//! </pre>
+//!
+//! ## Perl character classes
+//!
+//! <pre class="rust">
+//! \d     digit ([0-9])
+//! \D     not digit
+//! \s     whitespace ([\t\n\f\r ])
+//! \S     not whitespace
+//! \w     ASCII word character ([0-9A-Za-z_])
+//! \W     not ASCII word character
+//! </pre>
+//!
+//! ## ASCII character classes
+//!
+//! <pre class="rust">
+//! [:alnum:]    alphanumeric ([0-9A-Za-z]) 
+//! [:alpha:]    alphabetic ([A-Za-z]) 
+//! [:ascii:]    ASCII ([\x00-\x7F]) 
+//! [:blank:]    blank ([\t ]) 
+//! [:cntrl:]    control ([\x00-\x1F\x7F]) 
+//! [:digit:]    digits ([0-9]) 
+//! [:graph:]    graphical ([!-~])
+//! [:lower:]    lower case ([a-z]) 
+//! [:print:]    printable ([ -~])
+//! [:punct:]    punctuation ([!-/:-@[-`{-~]) 
+//! [:space:]    whitespace ([\t\n\v\f\r ]) 
+//! [:upper:]    upper case ([A-Z]) 
+//! [:word:]     word characters ([0-9A-Za-z_]) 
+//! [:xdigit:]   hex digit ([0-9A-Fa-f]) 
+//! </pre>
 
 #![feature(macro_rules, phase)]
 
