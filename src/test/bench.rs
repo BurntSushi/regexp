@@ -1,16 +1,16 @@
 #![allow(unused_imports)]
 
 use rand::{Rng, task_rng};
-use stdtest::BenchHarness;
+use stdtest::Bencher;
 use std::str;
 use super::super::{Regexp, NoExpand};
 
-fn bench_assert_match(b: &mut BenchHarness, re: Regexp, text: &str) {
+fn bench_assert_match(b: &mut Bencher, re: Regexp, text: &str) {
     b.iter(|| if !re.is_match(text) { fail!("no match") });
 }
 
 #[bench]
-fn no_exponential(b: &mut BenchHarness) {
+fn no_exponential(b: &mut Bencher) {
     let n = 100;
     let re = Regexp::new("a?".repeat(n) + "a".repeat(n)).unwrap();
     let text = "a".repeat(n);
@@ -18,28 +18,28 @@ fn no_exponential(b: &mut BenchHarness) {
 }
 
 #[bench]
-fn literal(b: &mut BenchHarness) {
+fn literal(b: &mut Bencher) {
     let re = Regexp::new("y").unwrap();
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
-fn not_literal(b: &mut BenchHarness) {
+fn not_literal(b: &mut Bencher) {
     let re = Regexp::new(".y").unwrap();
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
-fn match_class(b: &mut BenchHarness) {
+fn match_class(b: &mut Bencher) {
     let re = Regexp::new("[abcdw]").unwrap();
     let text = "xxxx".repeat(20) + "w";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
-fn match_class_in_range(b: &mut BenchHarness) {
+fn match_class_in_range(b: &mut Bencher) {
     // 'b' is between 'a' and 'c', so the class range checking doesn't help.
     let re = Regexp::new("[ac]").unwrap();
     let text = "bbbb".repeat(20) + "c";
@@ -47,7 +47,7 @@ fn match_class_in_range(b: &mut BenchHarness) {
 }
 
 #[bench]
-fn replace_all(b: &mut BenchHarness) {
+fn replace_all(b: &mut Bencher) {
     let re = Regexp::new("[cjrw]").unwrap();
 	let text = "abcdefghijklmnopqrstuvwxyz";
     // FIXME: This isn't using the $name expand stuff.
@@ -57,70 +57,70 @@ fn replace_all(b: &mut BenchHarness) {
 }
 
 #[bench]
-fn anchored_literal_short_non_match(b: &mut BenchHarness) {
+fn anchored_literal_short_non_match(b: &mut Bencher) {
     let re = Regexp::new("^zbc(d|e)").unwrap();
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn anchored_literal_long_non_match(b: &mut BenchHarness) {
+fn anchored_literal_long_non_match(b: &mut Bencher) {
     let re = Regexp::new("^zbc(d|e)").unwrap();
     let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn anchored_literal_short_match(b: &mut BenchHarness) {
+fn anchored_literal_short_match(b: &mut Bencher) {
     let re = Regexp::new("^.bc(d|e)").unwrap();
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn anchored_literal_long_match(b: &mut BenchHarness) {
+fn anchored_literal_long_match(b: &mut Bencher) {
     let re = Regexp::new("^.bc(d|e)").unwrap();
     let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn one_pass_short_a(b: &mut BenchHarness) {
+fn one_pass_short_a(b: &mut Bencher) {
     let re = Regexp::new("^.bc(d|e)*$").unwrap();
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn one_pass_short_a_not(b: &mut BenchHarness) {
+fn one_pass_short_a_not(b: &mut Bencher) {
     let re = Regexp::new(".bc(d|e)*$").unwrap();
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn one_pass_short_b(b: &mut BenchHarness) {
+fn one_pass_short_b(b: &mut Bencher) {
     let re = Regexp::new("^.bc(?:d|e)*$").unwrap();
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn one_pass_short_b_not(b: &mut BenchHarness) {
+fn one_pass_short_b_not(b: &mut Bencher) {
     let re = Regexp::new(".bc(?:d|e)*$").unwrap();
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn one_pass_long_prefix(b: &mut BenchHarness) {
+fn one_pass_long_prefix(b: &mut Bencher) {
     let re = Regexp::new("^abcdefghijklmnopqrstuvwxyz.*$").unwrap();
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
-fn one_pass_long_prefix_not(b: &mut BenchHarness) {
+fn one_pass_long_prefix_not(b: &mut Bencher) {
     let re = Regexp::new("^.bcdefghijklmnopqrstuvwxyz.*$").unwrap();
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
@@ -129,7 +129,7 @@ fn one_pass_long_prefix_not(b: &mut BenchHarness) {
 macro_rules! throughput(
     ($name:ident, $regex:ident, $size:expr) => (
         #[bench]
-        fn $name(b: &mut BenchHarness) {
+        fn $name(b: &mut Bencher) {
             let re = Regexp::new($regex).unwrap();
             let text = gen_text($size);
             b.bytes = $size;

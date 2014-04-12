@@ -1,5 +1,6 @@
 use std::char;
 use std::cmp;
+use std::fmt;
 use std::iter;
 use std::num;
 use std::str;
@@ -19,6 +20,13 @@ static MAX_REPEAT: uint = 1000;
 pub struct Error {
     pub pos: uint,
     pub msg: ~str,
+}
+
+impl fmt::Show for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f.buf, "Regexp syntax error near position {}: {}",
+               self.pos, self.msg)
+    }
 }
 
 /// Represents the abstract syntax of a regular expression.

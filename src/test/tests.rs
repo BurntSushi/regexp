@@ -176,7 +176,6 @@ mod matches;
 
 mod large {
     use rand::{Rng, task_rng};
-    use std::str;
     use super::super::super::compile::Program;
     use super::super::super::parse::parse;
     use super::super::super::quote;
@@ -187,11 +186,11 @@ mod large {
                     abcdefghijklmnopqrstuvwxyz\
                     0123456789\
                     ~!@#$%^&*(){},.[]\n \\-+");
-        let mut s = str::with_capacity(len);
+        let mut s = StrBuf::with_capacity(len);
         for _ in range(0, len) {
             s.push_char(g.choose(CHARSET) as char)
         }
-        s
+        s.into_owned()
     }
 
     #[test]

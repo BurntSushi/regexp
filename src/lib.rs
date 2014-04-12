@@ -16,15 +16,15 @@ extern crate rand;
 #[cfg(bench)]
 extern crate stdtest = "test";
 
-#[cfg(test)]
+// During tests, this links with the `regexp` and `regexp_re` crates to provide
+// the `re!` macro (so it can be tested).
+// We don't do this for benchmarks since it (currently) prevents compiling
+// with -Z lto.
+#[cfg(test, not(bench))]
 #[phase(syntax)]
 extern crate regexp_re;
-#[cfg(test)]
+#[cfg(test, not(bench))]
 extern crate regexp;
-
-use std::fmt;
-use std::str;
-use parse::is_punct;
 
 pub use parse::Error;
 pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
@@ -39,24 +39,17 @@ mod vm;
 #[cfg(test)]
 mod test;
 
-impl fmt::Show for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f.buf, "Regexp syntax error near position {}: {}",
-               self.pos, self.msg)
-    }
-}
-
 /// Escapes all regular expression meta characters in `text` so that it may be
 /// safely used in a regular expression as a literal string.
 pub fn quote(text: &str) -> ~str {
-    let mut quoted = str::with_capacity(text.len());
+    let mut quoted = StrBuf::with_capacity(text.len());
     for c in text.chars() {
-        if is_punct(c) {
+        if parse::is_punct(c) {
             quoted.push_char('\\')
         }
         quoted.push_char(c);
     }
-    quoted
+    quoted.into_owned()
 }
 
 /// Compiles a regular expression. Calls `fail!` for invalid expressions.

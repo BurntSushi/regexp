@@ -3,7 +3,6 @@
 use std::cmp;
 use std::iter;
 use std::slice::Vector;
-use std::str;
 use std::str::{MaybeOwned, Owned};
 use super::parse;
 use super::parse::{
@@ -118,7 +117,7 @@ impl Program {
         // Try to discover a literal string prefix.
         // This is a bit hacky since we have to skip over the initial
         // 'Save' instruction.
-        let mut pre = str::with_capacity(5);
+        let mut pre = StrBuf::with_capacity(5);
         for i in iter::range(1, c.insts.len()) {
             match *c.insts.get(i) {
                 OneChar(c, FLAG_EMPTY) => pre.push_char(c),
@@ -131,7 +130,7 @@ impl Program {
             regex: Owned(regex.to_owned()),
             insts: Dynamic(c.insts),
             names: Dynamic(names),
-            prefix: Owned(pre),
+            prefix: Owned(pre.into_owned()),
         }
     }
 

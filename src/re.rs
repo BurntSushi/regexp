@@ -1,6 +1,5 @@
 use collections::HashMap;
 use std::from_str::from_str;
-use std::str;
 
 use super::compile::Program;
 use super::parse::{parse, Error};
@@ -9,6 +8,10 @@ use super::vm::{CapturePairs, MatchKind, Exists, Location, Submatches};
 
 /// Regexp is a compiled regular expression. It can be used to search, split
 /// or replace text.
+///
+/// While this crate will handle Unicode strings (whether in the regular
+/// expression or in the search text), all positions returned are **byte 
+/// indices**.
 ///
 /// The lifetimes `'r` and `'t` in this crate correspond to the lifetime of a 
 /// compiled regular expression and text to search, respectively.
@@ -265,7 +268,7 @@ impl Regexp {
     /// submatches in the replacement string.
     pub fn replacen<R: Replacer>
                    (&self, text: &str, limit: uint, rep: R) -> ~str {
-        let mut new = str::with_capacity(text.len());
+        let mut new = StrBuf::with_capacity(text.len());
         let mut last_match = 0u;
         let mut i = 0;
         for cap in self.captures_iter(text) {
@@ -282,7 +285,7 @@ impl Regexp {
             last_match = e;
         }
         new.push_str(text.slice(last_match, text.len()));
-        new
+        new.into_owned()
     }
 }
 
