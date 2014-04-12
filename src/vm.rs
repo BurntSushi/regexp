@@ -24,7 +24,7 @@
 use std::cmp;
 use std::mem;
 use super::compile::{
-    Program,
+    Program, Inst,
     Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Save, Jump, Split,
 };
@@ -45,6 +45,7 @@ pub fn run<'r, 't>(prog: &'r Program, input: &'t str, caps: bool,
                    start: uint, end: uint) -> CapturePairs {
     unflatten_capture_locations(Nfa {
         prog: prog,
+        insts: prog.insts.as_slice(),
         input: input,
         caps: caps,
         start: start,
@@ -74,6 +75,7 @@ fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
 
 struct Nfa<'r, 't> {
     prog: &'r Program,
+    insts: &'r [Inst],
     input: &'t str,
     caps: bool,
     start: uint,
@@ -84,11 +86,17 @@ struct Nfa<'r, 't> {
     next: Option<char>,
 }
 
+enum StepState {
+    StepMatchEarlyReturn,
+    StepMatch,
+    StepContinue,
+}
+
 impl<'r, 't> Nfa<'r, 't> {
     fn run(&mut self) -> CaptureLocs {
         let num_caps = self.prog.num_captures();
-        let clist = &mut Threads::new(self.prog.insts.len(), num_caps);
-        let nlist = &mut Threads::new(self.prog.insts.len(), num_caps);
+        let clist = &mut Threads::new(self.insts.len(), num_caps);
+        let nlist = &mut Threads::new(self.insts.len(), num_caps);
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
@@ -139,13 +147,10 @@ impl<'r, 't> Nfa<'r, 't> {
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.step(nlist, clist.groups(i), pc) {
-                    (Some(locs), true) => return locs,
-                    (Some(locs), false) => {
-                        groups = locs;
-                        clist.empty();
-                    },
-                    _ => {}
+                match self.step(&mut groups, nlist, clist.groups(i), pc) {
+                    StepMatchEarlyReturn => return groups,
+                    StepMatch => clist.empty(),
+                    StepContinue => {},
                 }
                 i += 1;
             }
@@ -155,9 +160,10 @@ impl<'r, 't> Nfa<'r, 't> {
         groups
     }
 
-    fn step(&self, nlist: &mut Threads, caps: &mut [Option<uint>], pc: uint)
-           -> (Option<CaptureLocs>, bool) {
-        match self.prog.insts.as_slice()[pc] {
+    fn step(&self, groups: &mut CaptureLocs, nlist: &mut Threads,
+            caps: &mut [Option<uint>], pc: uint)
+           -> StepState {
+        match self.insts[pc] {
             Match => {
                 if !self.caps {
                     // This is a terrible hack that is used to
@@ -166,10 +172,16 @@ impl<'r, 't> Nfa<'r, 't> {
                     // We can bail out super early since we don't
                     // care about matching leftmost-longest.
                     // return vec!(Some(0), Some(0)) 
-                    return (Some(vec!(Some(0), Some(0))), true)
+                    *groups.get_mut(0) = Some(0);
+                    *groups.get_mut(1) = Some(0);
+                    return StepMatchEarlyReturn
                 } else {
-                    let caps = Vec::from_slice(caps);
-                    return (Some(caps), false)
+                    let mut i = 0;
+                    while i < groups.len() {
+                        *groups.get_mut(i) = caps[i];
+                        i += 1;
+                    }
+                    return StepMatch
                 }
             }
             OneChar(c, flags) => {
@@ -198,7 +210,7 @@ impl<'r, 't> Nfa<'r, 't> {
             EmptyBegin(_) | EmptyEnd(_) | EmptyWordBoundary(_)
             | Save(_) | Jump(_) | Split(_, _) => {},
         }
-        (None, false)
+        StepContinue
     }
 
     fn add(&self, nlist: &mut Threads, pc: uint, groups: &mut [Option<uint>]) {
@@ -219,7 +231,7 @@ impl<'r, 't> Nfa<'r, 't> {
         //
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
-        match self.prog.insts.as_slice()[pc] {
+        match self.insts[pc] {
             EmptyBegin(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);

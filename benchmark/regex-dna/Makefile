@@ -3,6 +3,9 @@ GOMAXPROCS ?= 4
 bench-rust: run-rust big.fasta
 	time ./run-rust < big.fasta
 
+bench-rust-perf: run-rust big.fasta
+	time perf record -g -s ./run-rust < big.fasta
+
 bench-golang: run-golang big.fasta
 	time GOMAXPROCS=$(GOMAXPROCS) ./run-golang < big.fasta
 
