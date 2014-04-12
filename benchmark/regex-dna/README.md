@@ -42,8 +42,8 @@ thread:
 [andrew@Liger regex-dna] make GOMAXPROCS=1 bench-golang
 time GOMAXPROCS=1 ./run-golang < big.fasta
 ...
-real    1m2.909s
-user    1m2.750s
-sys     0m0.223s
+real    0m42.102s
+user    0m41.370s
+sys     0m0.730s
 ```
 
