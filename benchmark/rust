@@ -1,36 +1,35 @@
 rustc --opt-level=3 -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
 RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench
 
-literal                                1253 ns/iter (+/- 6)
-not_literal                            3009 ns/iter (+/- 31)
-match_class                            3905 ns/iter (+/- 51)
-match_class_in_range                   4029 ns/iter (+/- 11)
-replace_all                            6063 ns/iter (+/- 238)
-anchored_literal_short_non_match       2115 ns/iter (+/- 10)
-anchored_literal_long_non_match       13502 ns/iter (+/- 190)
-anchored_literal_short_match           1820 ns/iter (+/- 40)
-anchored_literal_long_match            4150 ns/iter (+/- 124)
-one_pass_short_a                       4254 ns/iter (+/- 29)
-one_pass_short_a_not                   4300 ns/iter (+/- 59)
-one_pass_short_b                       3197 ns/iter (+/- 76)
-one_pass_short_b_not                   3457 ns/iter (+/- 14)
-one_pass_long_prefix                   4691 ns/iter (+/- 15)
-one_pass_long_prefix_not               4658 ns/iter (+/- 17)
-easy0_32                               2486 ns/iter (+/- 58) = 12 MB/s
-easy0_1K                               9141 ns/iter (+/- 959) = 112 MB/s
-easy0_32K                            195584 ns/iter (+/- 1923) = 167 MB/s
-easy0_1M                            6777099 ns/iter (+/- 1035718) = 154 MB/s
-easy1_32                               2121 ns/iter (+/- 149) = 15 MB/s
-easy1_1K                               9740 ns/iter (+/- 985) = 105 MB/s
-easy1_32K                            228689 ns/iter (+/- 5054) = 143 MB/s
-easy1_1M                            7861191 ns/iter (+/- 6951030) = 133 MB/s
-medium_32                              3536 ns/iter (+/- 84) = 9 MB/s
-medium_1K                             43696 ns/iter (+/- 910) = 23 MB/s
-medium_32K                          1279339 ns/iter (+/- 4923) = 25 MB/s
-medium_1M                          41602665 ns/iter (+/- 1204975) = 25 MB/s
-hard_32                                5397 ns/iter (+/- 36) = 5 MB/s
-hard_1K                               68928 ns/iter (+/- 308) = 14 MB/s
-hard_32K                            2091240 ns/iter (+/- 3932) = 15 MB/s
-hard_1M                            67565987 ns/iter (+/- 6987922) = 14 MB/s
-no_exponential                       339765 ns/iter (+/- 469)
-
+literal                                 658 ns/iter (+/- 4)
+not_literal                            2690 ns/iter (+/- 8)
+match_class                            3374 ns/iter (+/- 19)
+match_class_in_range                   3493 ns/iter (+/- 12)
+replace_all                            5526 ns/iter (+/- 27)
+anchored_literal_short_non_match       1955 ns/iter (+/- 15)
+anchored_literal_long_non_match       13056 ns/iter (+/- 51)
+anchored_literal_short_match           1501 ns/iter (+/- 13)
+anchored_literal_long_match            1504 ns/iter (+/- 22)
+one_pass_short_a                       4112 ns/iter (+/- 26)
+one_pass_short_a_not                   4128 ns/iter (+/- 17)
+one_pass_short_b                       3053 ns/iter (+/- 25)
+one_pass_short_b_not                   3274 ns/iter (+/- 19)
+one_pass_long_prefix                   4499 ns/iter (+/- 51)
+one_pass_long_prefix_not               4480 ns/iter (+/- 13)
+easy0_32                               2060 ns/iter (+/- 23) = 15 MB/s
+easy0_1K                               3279 ns/iter (+/- 115) = 312 MB/s
+easy0_32K                             41892 ns/iter (+/- 722) = 782 MB/s
+easy0_1M                            1278983 ns/iter (+/- 14709) = 818 MB/s
+easy1_32                               1692 ns/iter (+/- 108) = 18 MB/s
+easy1_1K                               4261 ns/iter (+/- 991) = 240 MB/s
+easy1_32K                             84830 ns/iter (+/- 5651) = 386 MB/s
+easy1_1M                            2665892 ns/iter (+/- 41217) = 393 MB/s
+medium_32                              3272 ns/iter (+/- 48) = 9 MB/s
+medium_1K                             42915 ns/iter (+/- 761) = 23 MB/s
+medium_32K                          1315950 ns/iter (+/- 5338) = 24 MB/s
+medium_1M                          42051117 ns/iter (+/- 80800) = 24 MB/s
+hard_32                                5207 ns/iter (+/- 54) = 6 MB/s
+hard_1K                               68031 ns/iter (+/- 302) = 15 MB/s
+hard_32K                            2079640 ns/iter (+/- 7819) = 15 MB/s
+hard_1M                            66479353 ns/iter (+/- 89056) = 15 MB/s
+no_exponential                       326157 ns/iter (+/- 1280)

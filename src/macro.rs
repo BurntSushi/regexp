@@ -63,15 +63,14 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
             &None => quote_expr!(cx, None),
         }
     );
-    let prefix = as_expr_vec_static(cx, sp, re.p.prefix.as_slice(),
-        |cx, _, &c| quote_expr!(cx, $c));
+    let prefix = re.p.prefix.as_slice();
     MRExpr(quote_expr!(&*cx,
         regexp::Regexp {
             p: regexp::program::Program {
                 regex: ::std::str::Slice($restr),
                 insts: regexp::program::Static($insts),
                 names: regexp::program::Static($names),
-                prefix: regexp::program::Static($prefix),
+                prefix: ::std::str::Slice($prefix),
             },
         }
     ))

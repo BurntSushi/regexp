@@ -530,35 +530,30 @@ pub struct FindCaptures<'r, 't> {
 
 impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
     fn next(&mut self) -> Option<Captures<'t>> {
-        if self.last_end > self.search.chars.len() {
+        if self.last_end > self.search.text.len() {
             return None
         }
 
-        let uni_caps = self.search.exec_slice(self.re,
-                                              self.last_end,
-                                              self.search.chars.len());
-        let (us, ue) =
-            if !has_match(&uni_caps) {
+        let caps = self.search.exec_slice(self.re,
+                                          self.last_end,
+                                          self.search.text.len());
+        let (s, e) =
+            if !has_match(&caps) {
                 return None
             } else {
-                uni_caps.get(0).unwrap()
+                caps.get(0).unwrap()
             };
-        let char_len = ue - us;
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if char_len == 0 && Some(self.last_end) == self.last_match {
+        if e - s == 0 && Some(self.last_end) == self.last_match {
             self.last_end += 1;
             return self.next()
         }
 
-        let bytei = self.search.bytei.as_slice();
-        let byte_caps = cap_to_byte_indices(uni_caps, bytei);
-        let caps = Captures::new(self.re, &self.search, byte_caps);
-
-        self.last_end = ue;
+        self.last_end = e;
         self.last_match = Some(self.last_end);
-        caps
+        Captures::new(self.re, &self.search, caps)
     }
 }
 
@@ -575,59 +570,51 @@ pub struct FindMatches<'r, 't> {
 
 impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
     fn next(&mut self) -> Option<(uint, uint)> {
-        if self.last_end > self.search.chars.len() {
+        if self.last_end > self.search.text.len() {
             return None
         }
 
-        let uni_caps = self.search.exec_slice(self.re,
-                                              self.last_end,
-                                              self.search.chars.len());
-        let (us, ue) =
-            if !has_match(&uni_caps) {
+        let caps = self.search.exec_slice(self.re,
+                                          self.last_end,
+                                          self.search.text.len());
+        let (s, e) =
+            if !has_match(&caps) {
                 return None
             } else {
-                uni_caps.get(0).unwrap()
+                caps.get(0).unwrap()
             };
-        let char_len = ue - us;
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if char_len == 0 && Some(self.last_end) == self.last_match {
+        if e - s == 0 && Some(self.last_end) == self.last_match {
             self.last_end += 1;
             return self.next()
         }
 
-        self.last_end = ue;
+        self.last_end = e;
         self.last_match = Some(self.last_end);
-        Some((*self.search.bytei.get(us), *self.search.bytei.get(ue)))
+        Some((s, e))
     }
 }
 
+/// Provides a convenient interface to executing the VM on a string or
+/// a portion of the string.
 struct SearchText<'t> {
     text: &'t str,
-    chars: Vec<char>,
-    bytei: Vec<uint>,
     caps: bool,
 }
 
-// TODO: Choose better names. There's some complicated footwork going on here
-// to handle character and byte indices.
 impl<'t> SearchText<'t> {
     fn from_str(input: &'t str, caps: bool) -> SearchText<'t> {
-        let chars = input.chars().collect();
-        let bytei = char_to_byte_indices(input);
-        SearchText { text: input, chars: chars, bytei: bytei, caps: caps }
+        SearchText { text: input, caps: caps }
     }
 
     fn exec(&self, re: &Regexp) -> CapturePairs {
-        let caps = vm::run(&re.p, self.chars.as_slice(),
-                           self.caps, 0, self.chars.len());
-        cap_to_byte_indices(caps, self.bytei.as_slice())
+        vm::run(&re.p, self.text, self.caps, 0, self.text.len())
     }
 
-    fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CapturePairs {
-        let caps = vm::run(&re.p, self.chars.as_slice(), self.caps, us, ue);
-        caps
+    fn exec_slice(&self, re: &Regexp, s: uint, e: uint) -> CapturePairs {
+        vm::run(&re.p, self.text, self.caps, s, e)
     }
 }
 
@@ -637,24 +624,7 @@ impl<'t> Container for SearchText<'t> {
     }
 }
 
-fn cap_to_byte_indices(mut cis: CapturePairs, bis: &[uint])
-                      -> CapturePairs {
-    for v in cis.mut_iter() {
-        *v = v.map(|(s, e)| (bis[s], bis[e]))
-    }
-    cis
-}
-
-fn char_to_byte_indices(input: &str) -> Vec<uint> {
-    let mut bytei = Vec::with_capacity(input.len());
-    for (bi, _) in input.char_indices() {
-        bytei.push(bi);
-    }
-    // Push one more for the length.
-    bytei.push(input.len());
-    bytei
-}
-
+#[inline(always)]
 fn has_match(caps: &CapturePairs) -> bool {
     caps.len() > 0 && caps.get(0).is_some()
 }

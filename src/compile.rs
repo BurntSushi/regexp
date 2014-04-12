@@ -3,6 +3,7 @@
 use std::cmp;
 use std::iter;
 use std::slice::Vector;
+use std::str;
 use std::str::{MaybeOwned, Owned};
 use super::parse;
 use super::parse::{
@@ -99,7 +100,7 @@ pub struct Program {
     // If the regular expression requires a literal prefix in order to have a
     // match, that prefix is stored here. (It's used in the VM to implement
     // an optimization.)
-    pub prefix: MaybeStatic<char>,
+    pub prefix: MaybeOwned<'static>,
 }
 
 impl Program {
@@ -117,10 +118,10 @@ impl Program {
         // Try to discover a literal string prefix.
         // This is a bit hacky since we have to skip over the initial
         // 'Save' instruction.
-        let mut pre = Vec::with_capacity(5);
+        let mut pre = str::with_capacity(5);
         for i in iter::range(1, c.insts.len()) {
             match *c.insts.get(i) {
-                OneChar(c, FLAG_EMPTY) => pre.push(c),
+                OneChar(c, FLAG_EMPTY) => pre.push_char(c),
                 _ => break
             }
         }
@@ -130,7 +131,7 @@ impl Program {
             regex: Owned(regex.to_owned()),
             insts: Dynamic(c.insts),
             names: Dynamic(names),
-            prefix: Dynamic(pre),
+            prefix: Owned(pre),
         }
     }
 

@@ -21,6 +21,7 @@
 //
 // AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
 
+use std::cmp;
 use std::mem;
 use super::compile::{
     Program,
@@ -40,7 +41,7 @@ pub type CaptureLocs = Vec<Option<uint>>;
 /// Note that if 'caps' is false, the capture indices returned will always be
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
-pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool,
+pub fn run<'r, 't>(prog: &'r Program, input: &'t str, caps: bool,
                    start: uint, end: uint) -> CapturePairs {
     unflatten_capture_locations(Nfa {
         prog: prog,
@@ -48,6 +49,10 @@ pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool,
         caps: caps,
         start: start,
         end: end,
+        ic: 0,
+        prev: None,
+        cur: None,
+        next: None,
     }.run())
 }
 
@@ -69,22 +74,27 @@ fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
 
 struct Nfa<'r, 't> {
     prog: &'r Program,
-    input: &'t [char],
+    input: &'t str,
     caps: bool,
     start: uint,
     end: uint,
+    ic: uint,
+    prev: Option<char>,
+    cur: Option<char>,
+    next: Option<char>,
 }
 
 impl<'r, 't> Nfa<'r, 't> {
-    fn run(&self) -> CaptureLocs {
+    fn run(&mut self) -> CaptureLocs {
         let num_caps = self.prog.num_captures();
         let clist = &mut Threads::new(self.prog.insts.len(), num_caps);
         let nlist = &mut Threads::new(self.prog.insts.len(), num_caps);
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
-        let mut ic = self.start;
-        while ic <= self.end {
+        self.ic = self.start;
+        let mut next_ic = self.set_chars(self.start);
+        while self.ic <= self.end {
             if clist.size == 0 {
                 // We have a match and we're done exploring alternatives.
                 // Time to quit.
@@ -98,11 +108,17 @@ impl<'r, 't> Nfa<'r, 't> {
                 // jump ahead quickly. If it can't be found, then we can bail 
                 // out early.
                 if self.prog.prefix.len() > 0 && clist.size == 0 {
-                    let needle = self.prog.prefix.as_slice();
-                    let haystack = self.input.as_slice().slice_from(ic);
+                    let needle = self.prog.prefix.as_slice().as_bytes();
+                    let haystack = self.input.as_bytes().slice_from(self.ic);
                     match find_prefix(needle, haystack) {
                         None => return Vec::from_elem(num_caps * 2, None),
-                        Some(i) => ic += i,
+                        Some(i) => {
+                            self.ic += i;
+                            next_ic = self.set_chars(self.ic);
+                            // println!("LITERAL MATCHED: {} :: {}", self.ic, i); 
+                            // println!("needle: {}, haystack: {}", 
+                                     // needle, haystack); 
+                        }
                     }
                 }
             }
@@ -111,13 +127,19 @@ impl<'r, 't> Nfa<'r, 't> {
             // a state starting at the current position in the input for the
             // beginning of the program only if we don't already have a match.
             if groups.get(0).is_none() {
-                self.add(clist, 0, ic, groups.as_mut_slice())
+                self.add(clist, 0, groups.as_mut_slice())
             }
+
+            // Now we try to read the next character.
+            // As a result, the 'step' method will look at the previous
+            // character.
+            self.ic = next_ic;
+            next_ic = self.set_chars(next_ic);
 
             let mut i = 0;
             while i < clist.size {
                 let pc = clist.pc(i);
-                match self.step(nlist, clist.groups(i), pc, ic) {
+                match self.step(nlist, clist.groups(i), pc) {
                     (Some(locs), true) => return locs,
                     (Some(locs), false) => {
                         groups = locs;
@@ -129,13 +151,11 @@ impl<'r, 't> Nfa<'r, 't> {
             }
             mem::swap(clist, nlist);
             nlist.empty();
-            ic += 1;
         }
         groups
     }
 
-    fn step(&self, nlist: &mut Threads, caps: &mut [Option<uint>],
-            pc: uint, ic: uint)
+    fn step(&self, nlist: &mut Threads, caps: &mut [Option<uint>], pc: uint)
            -> (Option<CaptureLocs>, bool) {
         match self.prog.insts.as_slice()[pc] {
             Match => {
@@ -153,26 +173,26 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
             }
             OneChar(c, flags) => {
-                if self.char_eq(flags & FLAG_NOCASE > 0, ic, c) {
-                    self.add(nlist, pc+1, ic+1, caps);
+                if self.char_eq(flags & FLAG_NOCASE > 0, self.prev, c) {
+                    self.add(nlist, pc+1, caps);
                 }
             }
             CharClass(ref ranges, flags) => {
-                if ic < self.input.len() {
+                if self.prev.is_some() {
+                    let c = self.prev.unwrap();
                     let negate = flags & FLAG_NEGATED > 0;
                     let casei = flags & FLAG_NOCASE > 0;
-                    let c = self.get(ic);
                     let found = ranges.as_slice();
                     let found = found.bsearch(|&rc| class_cmp(casei, c, rc));
                     let found = found.is_some();
                     if (found && !negate) || (!found && negate) {
-                        self.add(nlist, pc+1, ic+1, caps);
+                        self.add(nlist, pc+1, caps);
                     }
                 }
             }
             Any(flags) => {
-                if flags & FLAG_DOTNL > 0 || !self.char_eq(false, ic, '\n') {
-                    self.add(nlist, pc+1, ic+1, caps)
+                if flags & FLAG_DOTNL > 0 || !self.char_eq(false, self.prev, '\n') {
+                    self.add(nlist, pc+1, caps)
                 }
             }
             EmptyBegin(_) | EmptyEnd(_) | EmptyWordBoundary(_)
@@ -181,8 +201,7 @@ impl<'r, 't> Nfa<'r, 't> {
         (None, false)
     }
 
-    fn add(&self, nlist: &mut Threads, pc: uint, ic: uint,
-           groups: &mut [Option<uint>]) {
+    fn add(&self, nlist: &mut Threads, pc: uint, groups: &mut [Option<uint>]) {
         if nlist.contains(pc) {
             return
         }
@@ -204,42 +223,42 @@ impl<'r, 't> Nfa<'r, 't> {
             EmptyBegin(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
-                if self.is_begin(ic) || (multi && self.char_is(ic-1, '\n')) {
-                    self.add(nlist, pc + 1, ic, groups)
+                if self.is_begin() || (multi && self.char_is(self.prev, '\n')) {
+                    self.add(nlist, pc + 1, groups)
                 }
             }
             EmptyEnd(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
-                if self.is_end(ic) || (multi && self.char_is(ic, '\n')) {
-                    self.add(nlist, pc + 1, ic, groups)
+                if self.is_end() || (multi && self.char_is(self.cur, '\n')) {
+                    self.add(nlist, pc + 1, groups)
                 }
             }
             EmptyWordBoundary(flags) => {
                 nlist.add(pc, groups, true);
-                if self.is_word_boundary(ic) == !(flags & FLAG_NEGATED > 0) {
-                    self.add(nlist, pc + 1, ic, groups)
+                if self.is_word_boundary() == !(flags & FLAG_NEGATED > 0) {
+                    self.add(nlist, pc + 1, groups)
                 }
             }
             Save(slot) => {
                 nlist.add(pc, groups, true);
                 if !self.caps {
-                    self.add(nlist, pc + 1, ic, groups);
+                    self.add(nlist, pc + 1, groups);
                 } else {
                     let old = groups[slot];
-                    groups[slot] = Some(ic);
-                    self.add(nlist, pc + 1, ic, groups);
+                    groups[slot] = Some(self.ic);
+                    self.add(nlist, pc + 1, groups);
                     groups[slot] = old;
                 }
             }
             Jump(to) => {
                 nlist.add(pc, groups, true);
-                self.add(nlist, to, ic, groups)
+                self.add(nlist, to, groups)
             }
             Split(x, y) => {
                 nlist.add(pc, groups, true);
-                self.add(nlist, x, ic, groups);
-                self.add(nlist, y, ic, groups);
+                self.add(nlist, x, groups);
+                self.add(nlist, y, groups);
             }
             Match | OneChar(_, _) | CharClass(_, _) | Any(_) => {
                 // If captures are enabled, then we need to indicate that
@@ -251,25 +270,26 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    fn is_begin(&self, ic: uint) -> bool { ic == 0 }
-    fn is_end(&self, ic: uint) -> bool { ic == self.input.len() }
-
-    fn is_word_boundary(&self, ic: uint) -> bool {
-        if self.is_begin(ic) {
-            return self.is_word(ic)
-        }
-        if self.is_end(ic) {
-            return self.is_word(self.input.len()-1)
-        }
-        (self.is_word(ic) && !self.is_word(ic-1))
-        || (self.is_word(ic-1) && !self.is_word(ic))
+    fn is_begin(&self) -> bool { self.prev.is_none() }
+    fn is_end(&self) -> bool {
+        // println!("ic: {}, prev: {}, cur: {}, next: {}", 
+                 // self.ic, self.prev, self.cur, self.next); 
+        self.cur.is_none()
     }
 
-    fn is_word(&self, ic: uint) -> bool {
-        if ic >= self.input.len() {
-            return false
+    fn is_word_boundary(&self) -> bool {
+        if self.is_begin() {
+            return self.is_word(self.cur)
         }
-        let c = self.input[ic];
+        if self.is_end() {
+            return self.is_word(self.prev)
+        }
+        (self.is_word(self.cur) && !self.is_word(self.prev))
+        || (self.is_word(self.prev) && !self.is_word(self.cur))
+    }
+
+    fn is_word(&self, c: Option<char>) -> bool {
+        let c = match c { None => return false, Some(c) => c };
         c == '_'
         || (c >= '0' && c <= '9')
         || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -280,20 +300,45 @@ impl<'r, 't> Nfa<'r, 't> {
     // all of Unicode. I believe we need to check the entire fold for each
     // character. This will be easy to add if and when it gets added to Rust's
     // standard library.
-    fn char_eq(&self, casei: bool, ic: uint, regc: char) -> bool {
-        if ic >= self.input.len() {
-            return false
+    #[inline(always)]
+    fn char_eq(&self, casei: bool, textc: Option<char>, regc: char) -> bool {
+        match textc {
+            None => false,
+            Some(textc) => {
+                regc == textc
+                    || (casei && regc.to_uppercase() == textc.to_uppercase())
+            }
         }
-        let textc = self.get(ic);
-        regc == textc || (casei && regc.to_uppercase() == textc.to_uppercase())
     }
 
-    fn char_is(&self, ic: uint, c: char) -> bool {
-        ic < self.input.len() && self.input[ic] == c
+    #[inline(always)]
+    fn char_is(&self, textc: Option<char>, regc: char) -> bool {
+        textc == Some(regc)
     }
 
-    fn get(&self, ic: uint) -> char {
-        self.input[ic]
+    fn set_chars(&mut self, ic: uint) -> uint {
+        self.prev = None;
+        self.cur = None;
+        self.next = None;
+        if self.input.len() == 0 {
+            return 0 + 1
+        }
+        if ic > 0 {
+            let i = cmp::min(ic, self.input.len());
+            let prev = self.input.char_range_at_reverse(i);
+            self.prev = Some(prev.ch);
+        }
+        if ic < self.input.len() {
+            let cur = self.input.char_range_at(ic);
+            self.cur = Some(cur.ch);
+            if ic + cur.next < self.input.len() {
+                let next = self.input.char_range_at(cur.next);
+                self.next = Some(next.ch);
+            }
+            cur.next
+        } else {
+            self.input.len() + 1
+        }
     }
 }
 
@@ -372,6 +417,7 @@ impl Threads {
 /// If `casei` is `true`, then this ordering is computed case insensitively.
 ///
 /// This function is meant to be used with a binary search.
+#[inline(always)]
 fn class_cmp(casei: bool, mut textc: char,
              (mut start, mut end): (char, char)) -> Ordering {
     if casei {
@@ -399,7 +445,7 @@ fn class_cmp(casei: bool, mut textc: char,
 /// If `needle` is not in `haystack`, then `None` is returned.
 ///
 /// Note that this is using a naive substring algorithm.
-fn find_prefix(needle: &[char], haystack: &[char]) -> Option<uint> {
+fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
     if needle.len() > haystack.len() || needle.len() == 0 {
         return None
     }
