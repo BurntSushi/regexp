@@ -2,8 +2,10 @@
 // Modified by Andrew Gallant (https://github.com/BurntSushi).
 
 extern crate regexp;
+extern crate sync;
 
 use regexp::{Regexp, NoExpand};
+use sync::Arc;
  
 static VARIANTS: &'static [&'static str] = &'static [
     "agggtaaa|tttaccct",
@@ -37,7 +39,7 @@ fn count_matches(seq: &str, variant: &str) -> int {
     for _ in re.find_iter(seq) {
         n += 1;
     }
-    return n
+    n
 }
  
 fn main() {
@@ -45,18 +47,31 @@ fn main() {
     let mut seq = stdin.read_to_str().unwrap();
     let ilen = seq.len();
  
-    seq = Regexp::new("(>[^\n]+)?\n").unwrap().replace_all(seq, NoExpand(""));
+    seq = Regexp::new(">[^\n]*\n|\n").unwrap().replace_all(seq, NoExpand(""));
+    let seq_arc = Arc::new(seq.clone());
     let clen = seq.len();
  
-    for variant in VARIANTS.iter() {
-        println!("{} {}", variant, count_matches(seq,*variant));
+    let mut counts = vec!();
+    for &variant in VARIANTS.iter() {
+        let seq_arc_copy = seq_arc.clone();
+        let count = sync::Future::spawn(proc() {
+            count_matches(*seq_arc_copy, variant)
+        });
+        counts.push(count);
+    }
+ 
+    let mut seqlen = sync::Future::spawn(proc() {
+        let mut seq = seq;
+        for &Subst(k, v) in SUBST.iter() {
+            seq = replace(seq, k, v);
+        }
+        seq.len()
+    });
+    for (i, variant) in VARIANTS.iter().enumerate() {
+        println!("{} {:?}", variant, counts.get_mut(i).get());
     }
     println!("");
- 
-    for &Subst(k, v) in SUBST.iter() {
-        seq = replace(seq, k, v);
-    }
     println!("{}", ilen);
     println!("{}", clen);
-    println!("{}", seq.len());
+    println!("{}", seqlen.get());
 }

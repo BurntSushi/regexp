@@ -1,5 +1,3 @@
-GOMAXPROCS ?= 4
-
 bench-rust: run-rust big.fasta
 	time ./run-rust < big.fasta
 
@@ -7,7 +5,10 @@ bench-rust-perf: run-rust big.fasta
 	time perf record -g -s ./run-rust < big.fasta
 
 bench-golang: run-golang big.fasta
-	time GOMAXPROCS=$(GOMAXPROCS) ./run-golang < big.fasta
+	time ./run-golang < big.fasta
+
+bench-python: regex-dna.py
+	time python3 ./regex-dna.py < big.fasta
 
 big.fasta: generator
 	./generator 5000000 > big.fasta
@@ -25,6 +26,7 @@ run-golang: regex-dna.go
 check: check.fasta check.output run-rust run-golang
 	bash -c 'diff check.output <(./run-golang < check.fasta)'
 	bash -c 'diff check.output <(./run-rust < check.fasta)'
+	bash -c 'diff check.output <(python3 ./regex-dna.py < check.fasta)'
 
 check.fasta:
 	curl 'http://benchmarksgame.alioth.debian.org/download/regexdna-input.txt' > check.fasta
