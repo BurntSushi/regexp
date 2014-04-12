@@ -179,7 +179,6 @@ throughput!(medium_1M, MEDIUM, 1<<20)
 throughput!(hard_32, HARD, 32)
 throughput!(hard_1K, HARD, 1<<10)
 throughput!(hard_32K, HARD, 32<<10)
-throughput!(hard_64K, HARD, 64<<10)
 throughput!(hard_1M, HARD, 1<<20)
 // throughput!(hard_32M, HARD, 32<<20) 
 

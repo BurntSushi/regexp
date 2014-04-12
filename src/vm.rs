@@ -73,12 +73,14 @@ pub fn run<'r, 't>(prog: &'r Program, input: &'t str, which: MatchKind,
 /// by the time the VM is done executing. (Otherwise there is a bug in the VM.)
 fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
     let mut caps = Vec::with_capacity(locs.len() / 2);
-    for win in locs.as_slice().chunks(2) {
-        match (win[0], win[1]) {
+    let mut i = 0;
+    while i < locs.len() {
+        match (*locs.get(i), *locs.get(i+1)) {
             (Some(s), Some(e)) => caps.push(Some((s, e))),
             (None, None) => caps.push(None),
             wins => fail!("BUG: Invalid capture group: {}", wins),
         }
+        i += 2;
     }
     caps
 }
