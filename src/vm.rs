@@ -155,7 +155,7 @@ impl<'r, 't> Nfa<'r, 't> {
             // As a result, the 'step' method will look at the previous
             // character.
             self.ic = next_ic;
-            next_ic = self.chars.swap();
+            next_ic = self.chars.advance();
 
             let mut i = 0;
             while i < clist.size {
@@ -338,6 +338,9 @@ impl<'r, 't> Nfa<'r, 't> {
     }
 }
 
+/// CharReader is responsible for maintaining a "previous" and a "current"
+/// character. This one-character lookahead is necessary for assertions that
+/// look one character before or after the current position.
 struct CharReader<'r> {
     input: &'r str,
     prev: Option<char>,
@@ -346,19 +349,8 @@ struct CharReader<'r> {
 }
 
 impl<'r> CharReader<'r> {
-    fn swap(&mut self) -> uint {
-        self.prev = self.cur;
-        if self.next < self.input.len() {
-            let cur = self.input.char_range_at(self.next);
-            self.cur = Some(cur.ch);
-            self.next = cur.next;
-        } else {
-            self.cur = None;
-            self.next = self.input.len() + 1;
-        }
-        self.next
-    }
-
+    // Sets the previous and current character given any arbitrary byte
+    // index (at a unicode codepoint boundary).
     fn set(&mut self, ic: uint) -> uint {
         self.prev = None;
         self.cur = None;
@@ -380,6 +372,21 @@ impl<'r> CharReader<'r> {
         } else {
             self.input.len() + 1
         }
+    }
+
+    // advance does the same as set, except it always advances to the next 
+    // character in the input (and therefore does half as many UTF8 decodings).
+    fn advance(&mut self) -> uint {
+        self.prev = self.cur;
+        if self.next < self.input.len() {
+            let cur = self.input.char_range_at(self.next);
+            self.cur = Some(cur.ch);
+            self.next = cur.next;
+        } else {
+            self.cur = None;
+            self.next = self.input.len() + 1;
+        }
+        self.next
     }
 }
 
