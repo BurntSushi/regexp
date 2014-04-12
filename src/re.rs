@@ -36,20 +36,29 @@ pub fn regexp(regex: &str) -> Regexp {
 /// returned.
 ///
 /// To find submatches, split or replace text, you'll need to compile an
-/// expression with `Regexp::new` first.
+/// expression first.
 pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
 }
 
 /// Regexp is a compiled regular expression. It can be used to search, split
-/// or replace text.
+/// or replace text. All searching is done with an implicit `.*?` at the 
+/// beginning and end of an expression. To force an expression to match the 
+/// whole string (or a prefix or a suffix), you must use an anchor like `^` or 
+/// `$` (or `\A` and `\z`).
 ///
 /// While this crate will handle Unicode strings (whether in the regular
 /// expression or in the search text), all positions returned are **byte 
-/// indices**.
+/// indices**. Every byte index is guaranteed to be at a UTF8 codepoint 
+/// boundary.
 ///
 /// The lifetimes `'r` and `'t` in this crate correspond to the lifetime of a 
 /// compiled regular expression and text to search, respectively.
+///
+/// The only methods that allocate new strings are the string replacement 
+/// methods. All other methods (searching and splitting) return borrowed 
+/// pointers into the string given. (The underlying virtual machine does not 
+/// copy the search text either.)
 ///
 /// # Examples
 ///
@@ -459,7 +468,8 @@ impl<'t> Captures<'t> {
     }
 
     /// Returns the start and end positions of the Nth capture group.
-    /// Returns `(0, 0)` if `i` is not a valid capture group.
+    /// Returns `None` if `i` is not a valid capture group or if the capture
+    /// group did not match anything.
     /// The positions returned are *always* byte indices with respect to the 
     /// original string matched.
     pub fn pos(&self, i: uint) -> Option<(uint, uint)> {
@@ -470,7 +480,8 @@ impl<'t> Captures<'t> {
     }
 
     /// Returns the matched string for the capture group `i`.
-    /// If `i` isn't a valid capture group, then the empty string is returned.
+    /// If `i` isn't a valid capture group or didn't match anything, then the 
+    /// empty string is returned.
     pub fn at(&self, i: uint) -> &'t str {
         match self.pos(i) {
             None => "",
@@ -481,8 +492,8 @@ impl<'t> Captures<'t> {
     }
 
     /// Returns the matched string for the capture group named `name`.
-    /// If `name` isn't a valid capture group, then the empty string is 
-    /// returned.
+    /// If `name` isn't a valid capture group or didn't match anything, then 
+    /// the empty string is returned.
     pub fn name(&self, name: &str) -> &'t str {
         match self.named.find(&name.to_owned()) {
             None => "",
@@ -531,6 +542,7 @@ impl<'t> Captures<'t> {
 }
 
 impl<'t> Container for Captures<'t> {
+    /// Returns the number of captured groups.
     #[inline]
     fn len(&self) -> uint {
         self.locs.len()
@@ -580,7 +592,8 @@ impl<'t> Iterator<Option<(uint, uint)>> for SubCapturesPos<'t> {
 }
 
 /// An iterator that yields all non-overlapping capture groups matching a
-/// particular regular expression.
+/// particular regular expression. The iterator stops when no more matches can 
+/// be found.
 ///
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
 /// of the matched string.
@@ -623,7 +636,8 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
 /// An iterator over all non-overlapping matches for a particular string.
 ///
 /// The iterator yields a tuple of integers corresponding to the start and end
-/// of the match. The indices are byte offsets.
+/// of the match. The indices are byte offsets. The iterator stops when no more 
+/// matches can be found.
 ///
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
 /// of the matched string.

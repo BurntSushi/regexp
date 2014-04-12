@@ -18,7 +18,9 @@ static MAX_REPEAT: uint = 1000;
 /// (Once an expression is compiled, it is not possible to produce an error
 /// via searching, splitting or replacing.)
 pub struct Error {
+    /// The *approximate* character index of where the error occurred.
     pub pos: uint,
+    /// A message describing the error.
     pub msg: ~str,
 }
 

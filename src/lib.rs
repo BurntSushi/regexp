@@ -11,6 +11,177 @@
 //! has excellent worst case performance. The specific syntax supported is 
 //! documented further down.
 //!
+//! This crate's documentation provides some simple examples, describes Unicode 
+//! support and exhaustively lists the supported syntax. For more specific 
+//! details on the API, please see the documentation for the `Regexp` type.
+//!
+//! # First example: find a date
+//!
+//! General use of regular expressions in this package involves compiling an 
+//! expression and then using it to search, split or replace text. For example, 
+//! to confirm that some text resembles a date:
+//!
+//! ```rust
+//! use regexp::Regexp;
+//! let re = match Regexp::new(r"^\d{4}-\d{2}-\d{2}$") {
+//!     Ok(re) => re,
+//!     Err(err) => fail!("{}", err),
+//! };
+//! assert_eq!(re.is_match("2014-01-01"), true);
+//! ```
+//!
+//! Notice the use of the `^` and `$` anchors. In this crate, every expression 
+//! is executed with an implicit `.*?` at the beginning and end, which allows 
+//! it to match anywhere in the text. Anchors can be used to ensure that the 
+//! full text matches an expression.
+//!
+//! This example also demonstrates the utility of raw strings in Rust, which 
+//! are just like regular strings except they are prefixed with an `r` and do 
+//! not process any escape sequences. For example, `"\\d"` is the same 
+//! expression as `r"\d"`.
+//!
+//! # The `re!` macro
+//!
+//! Rust's compile time meta-programming facilities provide a way to write an 
+//! `re!` macro which compiles regular expressions *when your program 
+//! compiles*. Said differently, if you only use `re!` to build regular 
+//! expressions in your program, then your program cannot compile with an 
+//! invalid regular expression.
+//!
+//! To use the `re!` macro, you must enable the `phase` feature and import the 
+//! `regexp_re` crate as a syntax extension:
+//!
+//! ```rust
+//! #![feature(phase)]
+//! #[phase(syntax)]
+//! extern crate regexp_re;
+//! extern crate regexp;
+//!
+//! fn main() {
+//!     static re: regexp::Regexp = re!(r"^\d{4}-\d{2}-\d{2}$");
+//!     assert_eq!(re.is_match("2014-01-01"), true);
+//! }
+//! ```
+//!
+//! There are a few things worth mentioning about using the `re!` macro. 
+//! Firstly, it compiles an expression to *static* data, which means it can 
+//! live in the module scope in addition to function scope (as shown in the 
+//! previous example).
+//! Secondly, the `re!` macro *only* accepts string *literals*.
+//! Thirdly, the `regexp` crate *must* be linked with the name `regexp` since 
+//! the generated code depends on finding symbols in the `regexp` crate.
+//!
+//! In general, one should use the `re!` macro whenever possible since it 
+//! eliminates an entire class of bugs and incurs no runtime cost for 
+//! compilation. If your regular expression isn't known until runtime, then you 
+//! can use `Regexp::new`.
+//!
+//! Finally, note that an expression of the form `re!("...").is_match("...")` 
+//! is not allowed since `re!` produces static data that must live for the 
+//! lifetime of the program. You must always bind the result of `re!` to some 
+//! named `static` variable.
+//!
+//! # Example: iterating over capture groups
+//!
+//! This crate provides convenient iterators for matching an expression 
+//! repeatedly against a search string to find successive non-overlapping 
+//! matches. For example, to find all dates in a string and be able to access 
+//! them by their component pieces:
+//!
+//! ```rust
+//! # #![feature(phase)]
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # use regexp::Regexp; fn main() {
+//! static re: Regexp = re!(r"(\d{4})-(\d{2})-(\d{2})");
+//! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
+//! for cap in re.captures_iter(text) {
+//!     println!("Month: {} Day: {} Year: {}", cap.at(2), cap.at(3), cap.at(1));
+//! }
+//! // Output:
+//! // Month: 03 Day: 14 Year: 2012
+//! // Month: 01 Day: 01 Year: 2013
+//! // Month: 07 Day: 05 Year: 2014
+//! # }
+//! ```
+//!
+//! Notice that the year is in the capture group indexed at `1`. This is 
+//! because the *entire match* is stored in the capture group at index `0`.
+//!
+//! # Example: replacement with named capture groups
+//!
+//! Building on the previous example, perhaps we'd like to rearrange the date 
+//! formats. This can be done with text replacement. But to make the code 
+//! clearer, we can *name*  our capture groups and use those names as variables 
+//! in our replacement text:
+//!
+//! ```rust
+//! # #![feature(phase)]
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # use regexp::Regexp; fn main() {
+//! static re: Regexp = re!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
+//! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
+//! let after = re.replace_all(before, "$m/$d/$y");
+//! assert_eq!(after, ~"03/14/2012, 01/01/2013 and 07/05/2014");
+//! # }
+//! ```
+//!
+//! The `replace` methods are actually polymorphic in the replacement, which 
+//! provides more flexibility than is seen here. (See the documentation for 
+//! `Regexp::replace` for more details.)
+//!
+//! # Pay for what you use
+//!
+//! With respect to searching text with a regular expression, there are three 
+//! questions that can be asked:
+//!
+//! 1. Does the text match this expression?
+//! 2. If so, where does it match?
+//! 3. Where are the submatches?
+//!
+//! Generally speaking, this crate could provide a function to answer only #3, 
+//! which would subsume #1 and #2 automatically. However, it can be 
+//! significantly more expensive to compute the location of submatches, so it's 
+//! best not to do it if you don't need to.
+//!
+//! Therefore, only use what you need. For example, don't use `find` if you 
+//! only need to test if an expression matches a string. (Use `is_match` 
+//! instead.)
+//!
+//! # Unicode
+//!
+//! This implementation executes regular expressions **only** on sequences of 
+//! UTF8 codepoints while exposing match locations as byte indices.
+//!
+//! Currently, only naive case folding is supported. Namely, when matching 
+//! case insensitively, the characters are first converted to their uppercase 
+//! forms and then compared.
+//!
+//! Regular expressions themselves are also **only** interpreted as a sequence 
+//! of UTF8 codepoints. This means you can embed Unicode characters directly 
+//! into your expression:
+//!
+//! ```rust
+//! # #![feature(phase)]
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # use regexp::Regexp; fn main() {
+//! static re: Regexp = re!(r"(?i)Δ+");
+//! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
+//! # }
+//! ```
+//!
+//! Finally, Unicode general categories and scripts are available as character 
+//! classes. For example, you can match a sequence of numerals, Greek or 
+//! Cherokee letters:
+//!
+//! ```rust
+//! # #![feature(phase)]
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # use regexp::Regexp; fn main() {
+//! static re: Regexp = re!(r"[\pN\p{Greek}\p{Cherokee}]+");
+//! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
+//! # }
+//! ```
+//!
 //! # Syntax
 //!
 //! The syntax supported in this crate is almost in an exact correspondence 
@@ -19,7 +190,7 @@
 //! ## Matching one character
 //!
 //! <pre class="rust">
-//! .           any character except new line (includes new line with 's' flag)
+//! .           any character except new line (includes new line with s flag)
 //! [xyz]       A character class matching either x, y or z.
 //! [^xyz]      A character class matching any character except x, y and z.
 //! [a-z]       A character class matching any character in range a-z.
@@ -66,9 +237,9 @@
 //! <pre class="rust">
 //! ^     the beginning of text
 //! $     the end of text
-//! \A    the beginning of text (even with multi-line mode enabled)
-//! \z    the end of text (even with multi-line mode enabled)
-//! \b    an ASCII word boundary (\w on one size and \W, \A, or \z on other)
+//! \A    only the beginning of text (even with multi-line mode enabled)
+//! \z    only the end of text (even with multi-line mode enabled)
+//! \b    an ASCII word boundary (\w on one side and \W, \A, or \z on other)
 //! \B    not an ASCII word boundary
 //! </pre>
 //!
@@ -104,7 +275,8 @@
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
 //! # use regexp::Regexp; fn main() {
 //! static re: Regexp = re!(r"(?i)a+(?-i)b+");
-//! assert_eq!(re.find("AaAaAbbBBBb"), Some((0, 7)));
+//! let cap = re.captures("AaAaAbbBBBb").unwrap();
+//! assert_eq!(cap.at(0), "AaAaAbb");
 //! # }
 //! ```
 //!
@@ -155,6 +327,25 @@
 //! [:word:]     word characters ([0-9A-Za-z_]) 
 //! [:xdigit:]   hex digit ([0-9A-Fa-f]) 
 //! </pre>
+//!
+//! # Untrusted input
+//!
+//! There are two factors to consider here: untrusted regular expressions and 
+//! untrusted search text.
+//!
+//! Currently, there are no counter-measures in place to prevent a malicious 
+//! user from writing an expression that may use a lot of resources. One such 
+//! example is to repeat counted repetitions: `((a{100}){100}){100}` will try 
+//! to repeat the `a` instruction `100^3` times. Essentially, this means it's 
+//! very easy for an attacker to exhaust your system's memory if they are 
+//! allowed to execute arbitrary regular expressions. A possible solution to 
+//! this is to impose a hard limit on the size of a compiled expression, but it 
+//! does not yet exist.
+//!
+//! The story is a bit better with untrusted searh text, since this crate's 
+//! implementation provides `O(nm)` search where `n` is the number of 
+//! characters in the search text and `m` is the number of instructions in a 
+//! compiled expression.
 
 #![feature(macro_rules, phase)]
 
