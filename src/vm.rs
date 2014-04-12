@@ -271,13 +271,19 @@ impl<'r, 't> Nfa<'r, 't> {
             Save(slot) => {
                 nlist.add(pc, groups, true);
                 match self.which {
-                    Exists => self.add(nlist, pc + 1, groups),
-                    Location | Submatches => {
+                    Location if slot <= 1 => {
                         let old = groups[slot];
                         groups[slot] = Some(self.ic);
                         self.add(nlist, pc + 1, groups);
                         groups[slot] = old;
                     }
+                    Submatches => {
+                        let old = groups[slot];
+                        groups[slot] = Some(self.ic);
+                        self.add(nlist, pc + 1, groups);
+                        groups[slot] = old;
+                    }
+                    Exists | Location => self.add(nlist, pc + 1, groups),
                 }
             }
             Jump(to) => {
