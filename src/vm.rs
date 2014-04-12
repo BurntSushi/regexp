@@ -40,12 +40,14 @@ pub type CaptureLocs = Vec<Option<uint>>;
 /// Note that if 'caps' is false, the capture indices returned will always be
 /// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
 /// a match.
-pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool)
-                  -> CapturePairs {
+pub fn run<'r, 't>(prog: &'r Program, input: &'t [char], caps: bool,
+                   start: uint, end: uint) -> CapturePairs {
     unflatten_capture_locations(Nfa {
         prog: prog,
         input: input,
         caps: caps,
+        start: start,
+        end: end,
     }.run())
 }
 
@@ -69,6 +71,8 @@ struct Nfa<'r, 't> {
     prog: &'r Program,
     input: &'t [char],
     caps: bool,
+    start: uint,
+    end: uint,
 }
 
 impl<'r, 't> Nfa<'r, 't> {
@@ -79,11 +83,8 @@ impl<'r, 't> Nfa<'r, 't> {
 
         let mut groups = Vec::from_elem(num_caps * 2, None);
 
-        // Try to look for a literal string prefix.j
-        // let mut start = 0; 
-
-        let mut ic = 0;
-        while ic <= self.input.len() {
+        let mut ic = self.start;
+        while ic <= self.end {
             if clist.size == 0 {
                 // We have a match and we're done exploring alternatives.
                 // Time to quit.

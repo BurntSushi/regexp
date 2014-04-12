@@ -76,14 +76,15 @@ impl Regexp {
         *search.exec(self).get(0)
     }
 
-    /// Iterates through each successive non-overlapping match in `text`,
-    /// returning the start and end byte indices with respect to `text`.
+    /// Returns an iterator for each successive non-overlapping match in 
+    /// `text`, returning the start and end byte indices with respect to 
+    /// `text`.
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
         FindMatches {
             re: self,
             search: SearchText::from_str(text, true),
             last_end: 0,
-            last_match: 0,
+            last_match: None,
         }
     }
 
@@ -103,7 +104,7 @@ impl Regexp {
         FindCaptures {
             re: self,
             search: SearchText::from_str(text, true),
-            last_match: 0,
+            last_match: None,
             last_end: 0,
         }
     }
@@ -112,6 +113,22 @@ impl Regexp {
     /// of the regular expression.
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
+    ///
+    /// This method will *not* copy the text given.
+    ///
+    /// # Example
+    ///
+    /// To split a string delimited by arbitrary amounts of spaces or tabs:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # use regexp::Regexp; fn main() {
+    /// static re: Regexp = re!(r"[ \t]+");
+    /// let fields: Vec<&str> = re.split("a b \t  c\td    e").collect();
+    /// assert_eq!(fields, vec!("a", "b", "c", "d", "e"));
+    /// # }
+    /// ```
     pub fn split<'r, 't>(&'r self, text: &'t str) -> RegexpSplits<'r, 't> {
         RegexpSplits {
             finder: self.find_iter(text),
@@ -120,11 +137,29 @@ impl Regexp {
         }
     }
 
-    /// Returns an iterator of `limit` substrings of `text` delimited by a 
-    /// match of the regular expression. (A `limit` of `0` will return no
+    /// Returns an iterator of at most `limit` substrings of `text` delimited 
+    /// by a match of the regular expression. (A `limit` of `0` will return no
     /// substrings.)
     /// Namely, each element of the iterator corresponds to text that *isn't* 
     /// matched by the regular expression.
+    /// The remainder of the string that is not split will be the last element
+    /// in the iterator.
+    ///
+    /// This method will *not* copy the text given.
+    ///
+    /// # Example
+    ///
+    /// Get the first two words in some text:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # use regexp::Regexp; fn main() {
+    /// static re: Regexp = re!(r"\W+");
+    /// let fields: Vec<&str> = re.splitn("Hey! How are you?", 3).collect();
+    /// assert_eq!(fields, vec!("Hey", "How", "are you?"));
+    /// # }
+    /// ```
     pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: uint)
                          -> RegexpSplitsN<'r, 't> {
         RegexpSplitsN {
@@ -140,6 +175,8 @@ impl Regexp {
     /// `Captures` and returns the replaced string.
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
+    ///
+    /// # Examples
     ///
     /// Note that this function in polymorphic with respect to the replacement.
     /// In typical usage, this can just be a normal string:
@@ -266,9 +303,7 @@ pub struct NoExpand<'r>(pub &'r str);
 pub fn expand(caps: &Captures, text: &str) -> ~str {
     // How evil can you get?
     // FIXME: Don't use regexes for this. It's completely unnecessary.
-    // FIXME: Marginal improvement: get a syntax extension re! to prevent
-    //        recompilation every time.
-    let re = Regexp::new(r"(^|[^$])\$(\w+)").unwrap();
+    let re = Regexp::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
     let text = re.replace_all(text, |refs: &Captures| -> ~str {
         let (pre, name) = (refs.at(1), refs.at(2));
         pre + match from_str::<uint>(name) {
@@ -489,7 +524,7 @@ impl<'t> Iterator<Option<(uint, uint)>> for SubCapturesPos<'t> {
 pub struct FindCaptures<'r, 't> {
     re: &'r Regexp,
     search: SearchText<'t>,
-    last_match: uint,
+    last_match: Option<uint>,
     last_end: uint,
 }
 
@@ -512,7 +547,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if char_len == 0 && self.last_end == self.last_match {
+        if char_len == 0 && Some(self.last_end) == self.last_match {
             self.last_end += 1;
             return self.next()
         }
@@ -522,7 +557,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
         let caps = Captures::new(self.re, &self.search, byte_caps);
 
         self.last_end = ue;
-        self.last_match = self.last_end;
+        self.last_match = Some(self.last_end);
         caps
     }
 }
@@ -534,7 +569,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
 pub struct FindMatches<'r, 't> {
     re: &'r Regexp,
     search: SearchText<'t>,
-    last_match: uint,
+    last_match: Option<uint>,
     last_end: uint,
 }
 
@@ -557,13 +592,13 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
 
         // Don't accept empty matches immediately following a match.
         // i.e., no infinite loops please.
-        if char_len == 0 && self.last_end == self.last_match {
+        if char_len == 0 && Some(self.last_end) == self.last_match {
             self.last_end += 1;
             return self.next()
         }
 
         self.last_end = ue;
-        self.last_match = self.last_end;
+        self.last_match = Some(self.last_end);
         Some((*self.search.bytei.get(us), *self.search.bytei.get(ue)))
     }
 }
@@ -585,14 +620,14 @@ impl<'t> SearchText<'t> {
     }
 
     fn exec(&self, re: &Regexp) -> CapturePairs {
-        let caps = vm::run(&re.p, self.chars.as_slice(), self.caps);
+        let caps = vm::run(&re.p, self.chars.as_slice(),
+                           self.caps, 0, self.chars.len());
         cap_to_byte_indices(caps, self.bytei.as_slice())
     }
 
     fn exec_slice(&self, re: &Regexp, us: uint, ue: uint) -> CapturePairs {
-        let chars = self.chars.as_slice().slice(us, ue);
-        let caps = vm::run(&re.p, chars, self.caps);
-        caps.iter().map(|loc| loc.map(|(s, e)| (us + s, us + e))).collect()
+        let caps = vm::run(&re.p, self.chars.as_slice(), self.caps, us, ue);
+        caps
     }
 }
 
