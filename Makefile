@@ -43,13 +43,7 @@ test: build/tests
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests
 
 build/tests: $(SRC_FILES)
-	rustc $(RUSTTESTFLAGS) --test src/lib.rs -o ./build/tests
-
-test-re: build/tests-re
-	RUST_TEST_TASKS=1 RUST_LOG=regexp,regex_re_test ./build/tests-re
-
-build/tests-re: $(SRC_FILES) $(REGEXP_MACRO_LIB)
-	rustc $(RUSTTESTFLAGS) --test src/test/macro.rs -o ./build/tests-re
+	rustc $(RUSTTESTFLAGS) -L $(RUST_PATH) --test src/lib.rs -o ./build/tests
 
 bench: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench

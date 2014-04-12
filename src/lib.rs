@@ -16,18 +16,24 @@ extern crate rand;
 #[cfg(bench)]
 extern crate stdtest = "test";
 
+#[cfg(test)]
+#[phase(syntax)]
+extern crate regexp_re;
+#[cfg(test)]
+extern crate regexp;
+
 use std::fmt;
 use std::str;
 use parse::is_punct;
 
 pub use parse::Error;
-pub use regexp::{Regexp, Captures, SubCaptures, SubCapturesPos};
-pub use regexp::{FindCaptures, FindMatches};
-pub use regexp::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
+pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
+pub use re::{FindCaptures, FindMatches};
+pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
 
 mod compile;
 mod parse;
-mod regexp;
+mod re;
 mod vm;
 
 #[cfg(test)]

@@ -65,11 +65,11 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     );
     let prefix = re.p.prefix.as_slice();
     MRExpr(quote_expr!(&*cx,
-        regexp::Regexp {
-            p: regexp::program::Program {
+        ::regexp::Regexp {
+            p: ::regexp::program::Program {
                 regex: ::std::str::Slice($restr),
-                insts: regexp::program::Static($insts),
-                names: regexp::program::Static($names),
+                insts: ::regexp::program::Static($insts),
+                names: ::regexp::program::Static($names),
                 prefix: ::std::str::Slice($prefix),
             },
         }
@@ -100,26 +100,26 @@ impl ToTokens for bool {
 
 fn inst_to_expr(cx: &mut ExtCtxt, sp: Span, inst: &Inst) -> @Expr {
     match inst {
-        &Match => quote_expr!(&*cx, regexp::program::Match),
+        &Match => quote_expr!(&*cx, ::regexp::program::Match),
         &OneChar(c, casei) =>
-            quote_expr!(&*cx, regexp::program::OneChar($c, $casei)),
+            quote_expr!(&*cx, ::regexp::program::OneChar($c, $casei)),
         &CharClass(ref ranges, flags) => {
             char_class_to_expr(cx, sp, ranges, flags)
         }
         &Any(multi) =>
-            quote_expr!(&*cx, regexp::program::Any($multi)),
+            quote_expr!(&*cx, ::regexp::program::Any($multi)),
         &EmptyBegin(multi) =>
-            quote_expr!(&*cx, regexp::program::EmptyBegin($multi)),
+            quote_expr!(&*cx, ::regexp::program::EmptyBegin($multi)),
         &EmptyEnd(multi) =>
-            quote_expr!(&*cx, regexp::program::EmptyEnd($multi)),
+            quote_expr!(&*cx, ::regexp::program::EmptyEnd($multi)),
         &EmptyWordBoundary(multi) =>
-            quote_expr!(&*cx, regexp::program::EmptyWordBoundary($multi)),
+            quote_expr!(&*cx, ::regexp::program::EmptyWordBoundary($multi)),
         &Save(slot) =>
-            quote_expr!(&*cx, regexp::program::Save($slot)),
+            quote_expr!(&*cx, ::regexp::program::Save($slot)),
         &Jump(pc) =>
-            quote_expr!(&*cx, regexp::program::Jump($pc)),
+            quote_expr!(&*cx, ::regexp::program::Jump($pc)),
         &Split(x, y) =>
-            quote_expr!(&*cx, regexp::program::Split($x, $y)),
+            quote_expr!(&*cx, ::regexp::program::Split($x, $y)),
     }
 }
 
@@ -129,7 +129,7 @@ fn char_class_to_expr(cx: &mut ExtCtxt, sp: Span,
     let ranges = as_expr_vec_static(cx, sp, ranges.as_slice(),
         |cx, _, &(x, y)| quote_expr!(&*cx, ($x, $y)));
     quote_expr!(&*cx,
-        regexp::program::CharClass(regexp::program::Static($ranges), $flags))
+        ::regexp::program::CharClass(::regexp::program::Static($ranges), $flags))
 }
 
 fn as_expr_vec_static<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
