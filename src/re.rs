@@ -6,6 +6,41 @@ use super::parse::{parse, Error};
 use super::vm;
 use super::vm::{CapturePairs, MatchKind, Exists, Location, Submatches};
 
+/// Escapes all regular expression meta characters in `text` so that it may be
+/// safely used in a regular expression as a literal string.
+pub fn quote(text: &str) -> ~str {
+    let mut quoted = StrBuf::with_capacity(text.len());
+    for c in text.chars() {
+        if super::parse::is_punct(c) {
+            quoted.push_char('\\')
+        }
+        quoted.push_char(c);
+    }
+    quoted.into_owned()
+}
+
+/// Compiles a regular expression. Calls `fail!` for invalid expressions.
+///
+/// Note that when possible, you should prefer the `re!` macro instead of
+/// this function.
+pub fn regexp(regex: &str) -> Regexp {
+    match Regexp::new(regex) {
+        Ok(r) => r,
+        Err(err) => fail!("{}", err),
+    }
+}
+
+/// Tests if the given regular expression matches somewhere in the text given.
+///
+/// If there was a problem compiling the regular expression, an error is
+/// returned.
+///
+/// To find submatches, split or replace text, you'll need to compile an
+/// expression with `Regexp::new` first.
+pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
+    Regexp::new(regex).map(|r| r.is_match(text))
+}
+
 /// Regexp is a compiled regular expression. It can be used to search, split
 /// or replace text.
 ///
@@ -389,6 +424,8 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 /// via the `name` method. (Note that the 0th capture is always unnamed and so
 /// must be accessed with the `at` method.)
 ///
+/// Positions returned from a capture group are always byte indices.
+///
 /// `'t` is the lifetime of the matched text.
 pub struct Captures<'t> {
     text: &'t str,
@@ -494,6 +531,7 @@ impl<'t> Captures<'t> {
 }
 
 impl<'t> Container for Captures<'t> {
+    #[inline]
     fn len(&self) -> uint {
         self.locs.len()
     }
@@ -649,6 +687,7 @@ impl<'t> SearchText<'t> {
 }
 
 impl<'t> Container for SearchText<'t> {
+    #[inline]
     fn len(&self) -> uint {
         self.text.len()
     }

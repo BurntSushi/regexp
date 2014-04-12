@@ -30,6 +30,7 @@ pub use parse::Error;
 pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use re::{FindCaptures, FindMatches};
 pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
+pub use re::{quote, is_match, regexp};
 
 mod compile;
 mod parse;
@@ -38,41 +39,6 @@ mod vm;
 
 #[cfg(test)]
 mod test;
-
-/// Escapes all regular expression meta characters in `text` so that it may be
-/// safely used in a regular expression as a literal string.
-pub fn quote(text: &str) -> ~str {
-    let mut quoted = StrBuf::with_capacity(text.len());
-    for c in text.chars() {
-        if parse::is_punct(c) {
-            quoted.push_char('\\')
-        }
-        quoted.push_char(c);
-    }
-    quoted.into_owned()
-}
-
-/// Compiles a regular expression. Calls `fail!` for invalid expressions.
-///
-/// Note that when possible, you should prefer the `re!` macro instead of
-/// this function.
-pub fn regexp(regex: &str) -> Regexp {
-    match Regexp::new(regex) {
-        Ok(r) => r,
-        Err(err) => fail!("{}", err),
-    }
-}
-
-/// Tests if the given regular expression matches somewhere in the text given.
-///
-/// If there was a problem compiling the regular expression, an error is
-/// returned.
-///
-/// To find submatches, split or replace text, you'll need to compile an
-/// expression with `Regexp::new` first.
-pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
-    Regexp::new(regex).map(|r| r.is_match(text))
-}
 
 /// The `program` module exists to support the `re!` macro. Do not use.
 #[doc(hidden)]
