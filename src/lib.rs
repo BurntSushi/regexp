@@ -342,7 +342,7 @@
 //! this is to impose a hard limit on the size of a compiled expression, but it 
 //! does not yet exist.
 //!
-//! The story is a bit better with untrusted searh text, since this crate's 
+//! The story is a bit better with untrusted search text, since this crate's 
 //! implementation provides `O(nm)` search where `n` is the number of 
 //! characters in the search text and `m` is the number of instructions in a 
 //! compiled expression.
