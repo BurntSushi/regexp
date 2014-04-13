@@ -115,6 +115,8 @@ impl<'r, 't> Nfa<'r, 't> {
 
         // Determine if the expression starts with a '^' so we can avoid
         // simulating .*?
+        // Make sure multi-line mode isn't enabled for it, otherwise we can't
+        // drop the initial .*?
         let prefix_anchor = 
             match self.insts[1] {
                 EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
