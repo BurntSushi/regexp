@@ -73,8 +73,8 @@
 //!
 //! In general, one should use the `re!` macro whenever possible since it 
 //! eliminates an entire class of bugs and incurs no runtime cost for 
-//! compilation. If your regular expression isn't known until runtime, then you 
-//! can use `Regexp::new`.
+//! compilation of a regular expression. If your regular expression isn't known 
+//! until runtime, then you can use `Regexp::new`.
 //!
 //! Finally, note that an expression of the form `re!("...").is_match("...")` 
 //! is not allowed since `re!` produces static data that must live for the 
