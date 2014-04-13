@@ -117,7 +117,7 @@ impl Regexp {
         has_match(&SearchText::from_str(text, Exists).exec(self))
     }
 
-    /// Returns the start and end byte range of the leftmost-longest match in 
+    /// Returns the start and end byte range of the leftmost-first match in 
     /// `text`. If no match exists, then `None` is returned.
     ///
     /// Note that this should only be used if you want to discover the position
@@ -140,7 +140,7 @@ impl Regexp {
         }
     }
 
-    /// Returns the capture groups corresponding to the leftmost-longest
+    /// Returns the capture groups corresponding to the leftmost-first
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
     ///
@@ -226,7 +226,7 @@ impl Regexp {
         }
     }
 
-    /// Replaces the leftmost-longest match with the replacement provided.
+    /// Replaces the leftmost-first match with the replacement provided.
     /// The replacement can be a regular string (where `$N` and `$name` are
     /// expanded to match capture groups) or a function that takes the matches' 
     /// `Captures` and returns the replaced string.
