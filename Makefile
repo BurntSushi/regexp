@@ -6,7 +6,7 @@ RUSTFLAGS ?= --opt-level=3 -g
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
 SRC_FILES = $(wildcard src/*.rs) $(wildcard src/test/*.rs)
 REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
-REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_re.timestamp
+REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
 
 all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 
@@ -24,10 +24,10 @@ $(REGEXP_MACRO_LIB): $(REGEXP_LIB)
 	@touch $(REGEXP_MACRO_LIB)
 
 match-tests:
-	./make-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
+	./regexp-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
 
 unicode-tables:
-	./make-unicode-tables > ./src/unicode.rs
+	./regexp-unicode-tables > ./src/unicode.rs
 
 docs: $(SRC_FILES)
 	rm -rf doc

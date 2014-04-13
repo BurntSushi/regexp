@@ -1,3 +1,13 @@
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 use collections::HashMap;
 use std::from_str::from_str;
 
@@ -79,7 +89,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// ```rust
 /// #![feature(phase)]
 /// extern crate regexp;
-/// #[phase(syntax)] extern crate regexp_re;
+/// #[phase(syntax)] extern crate regexp_macros;
 ///
 /// fn main() {
 ///     static re: regexp::Regexp = re!(r"\d+");
@@ -179,7 +189,7 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
     /// static re: Regexp = re!(r"[ \t]+");
     /// let fields: Vec<&str> = re.split("a b \t  c\td    e").collect();
@@ -210,7 +220,7 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
     /// static re: Regexp = re!(r"\W+");
     /// let fields: Vec<&str> = re.splitn("Hey! How are you?", 3).collect();
@@ -240,7 +250,7 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
     /// static re: Regexp = re!("[^01]+");
     /// assert_eq!(re.replace("1078910", ""), ~"1010");
@@ -254,7 +264,7 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::{Regexp, Captures}; fn main() {
     /// static re: Regexp = re!(r"([^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
@@ -271,7 +281,7 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
     /// static re: Regexp = re!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
@@ -288,7 +298,7 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::{Regexp, NoExpand}; fn main() {
     /// static re: Regexp = re!(r"(?P<last>[^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));

@@ -1,8 +1,20 @@
-#![crate_id = "regexp#0.1.0"]
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+#![crate_id = "regexp#0.11-pre"]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
-#![license = "UNLICENSE"]
-#![doc(html_root_url = "http://burntsushi.net/rustdoc/regexp")]
+#![license = "MIT/ASL2"]
+#![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
+       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+       html_root_url = "http://static.rust-lang.org/doc/master")]
 
 //! This crate provides a native implementation of regular expressions that is
 //! heavily based on RE2 both in syntax and in implementation. Notably,
@@ -49,12 +61,12 @@
 //! invalid regular expression.
 //!
 //! To use the `re!` macro, you must enable the `phase` feature and import the 
-//! `regexp_re` crate as a syntax extension:
+//! `regexp_macros` crate as a syntax extension:
 //!
 //! ```rust
 //! #![feature(phase)]
 //! #[phase(syntax)]
-//! extern crate regexp_re;
+//! extern crate regexp_macros;
 //! extern crate regexp;
 //!
 //! fn main() {
@@ -90,7 +102,7 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
 //! static re: Regexp = re!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -116,7 +128,7 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
 //! static re: Regexp = re!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
@@ -162,7 +174,7 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
 //! static re: Regexp = re!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
@@ -175,7 +187,7 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
 //! static re: Regexp = re!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
@@ -272,7 +284,7 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_re;
+//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
 //! static re: Regexp = re!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
@@ -350,20 +362,17 @@
 #![feature(macro_rules, phase)]
 
 extern crate collections;
-#[phase(syntax, link)]
-extern crate log;
-extern crate rand;
 
 #[cfg(bench)]
 extern crate stdtest = "test";
 
-// During tests, this links with the `regexp` and `regexp_re` crates to provide
-// the `re!` macro (so it can be tested).
+// During tests, this links with the `regexp` and `regexp_macros` crates to 
+// provide the `re!` macro (so it can be tested).
 // We don't do this for benchmarks since it (currently) prevents compiling
 // with -Z lto.
 #[cfg(test, not(bench))]
 #[phase(syntax)]
-extern crate regexp_re;
+extern crate regexp_macros;
 #[cfg(test, not(bench))]
 extern crate regexp;
 

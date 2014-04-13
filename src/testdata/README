@@ -12,6 +12,6 @@ by me (Andrew Gallant) (only in repetition.dat) so that RE2/Go would pass them.
 have been a bad idea, but I think being consistent with an established Regex 
 library is worth something.
 
-Note that these files are read by 'make-match-tests' and turned into Rust tests 
-found in 'src/tests/matches.rs'.
+Note that these files are read by 'src/etc/regexp-match-tests' and turned into 
+Rust tests found in 'src/libregexp/tests/matches.rs'.
 
