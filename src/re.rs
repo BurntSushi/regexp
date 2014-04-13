@@ -143,6 +143,10 @@ impl Regexp {
     /// Returns the capture groups corresponding to the leftmost-longest
     /// match in `text`. Capture group `0` always corresponds to the entire 
     /// match. If no match is found, then `None` is returned.
+    ///
+    /// You should only use `captures` if you need access to submatches.
+    /// Otherwise, `find` is faster for discovering the location of the overall
+    /// match.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         let search = SearchText::from_str(text, Submatches);
         let caps = search.exec(self);
