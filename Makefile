@@ -4,25 +4,35 @@ BUILD_DIR ?= ./build/
 RUST_PATH ?= $(BUILD_DIR)
 RUSTFLAGS ?= --opt-level=3 -g
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
-SRC_FILES = $(wildcard src/*.rs) $(wildcard src/test/*.rs)
 REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
+REGEXP_LIB_FILES = $(wildcard src/test/*.rs) \
+									 src/compile.rs src/lib.rs src/parse.rs src/re.rs \
+									 src/unicode.rs src/vm.rs
 REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
+REGEXP_MACRO_LIB_FILES = src/macro.rs
+REGEXP_MACRO_EXP_LIB = $(BUILD_DIR)/.libregexp_macros_exp.timestamp
+REGEXP_MACRO_EXP_LIB_FILES = src/macro_exp.rs
 MOZILLA_RUST ?= $(HOME)/clones/rust
 
-all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
+all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB) $(REGEXP_MACRO_EXP_LIB)
 
 install:
 	cargo-lite install
 
-$(REGEXP_LIB): $(SRC_FILES)
+$(REGEXP_LIB): $(REGEXP_LIB_FILES)
 	@mkdir -p $(BUILD_DIR)
 	$(RUSTC) $(RUSTFLAGS) ./src/lib.rs --out-dir=$(BUILD_DIR)
 	@touch $(REGEXP_LIB)
 
-$(REGEXP_MACRO_LIB): $(REGEXP_LIB)
+$(REGEXP_MACRO_LIB): $(REGEXP_MACRO_LIB_FILES)
 	@mkdir -p $(BUILD_DIR)
 	$(RUSTC) -L $(BUILD_DIR) $(RUSTFLAGS) ./src/macro.rs --out-dir=$(BUILD_DIR)
 	@touch $(REGEXP_MACRO_LIB)
+
+$(REGEXP_MACRO_EXP_LIB): $(REGEXP_MACRO_EXP_LIB_FILES)
+	@mkdir -p $(BUILD_DIR)
+	$(RUSTC) -L $(BUILD_DIR) $(RUSTFLAGS) ./src/macro_exp.rs --out-dir=$(BUILD_DIR)
+	@touch $(REGEXP_MACRO_EXP_LIB)
 
 match-tests:
 	./regexp-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
@@ -30,7 +40,7 @@ match-tests:
 unicode-tables:
 	./regexp-unicode-tables > ./src/unicode.rs
 
-docs: $(SRC_FILES)
+docs: $(REGEXP_LIB_FILES) $(REGEXP_MACRO_LIB_FILES)
 	rm -rf doc
 	$(RUSTDOC) -L $(RUST_PATH) --test ./src/lib.rs
 	$(RUSTDOC) -L $(RUST_PATH) ./src/lib.rs
@@ -43,7 +53,7 @@ docs: $(SRC_FILES)
 test: build/tests
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests
 
-build/tests: $(SRC_FILES)
+build/tests: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 	rustc $(RUSTTESTFLAGS) -L $(RUST_PATH) --test src/lib.rs -o ./build/tests
 
 bench: build/bench
@@ -52,13 +62,13 @@ bench: build/bench
 bench-perf: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp perf record -g -s ./build/bench --bench
 
-build/bench: $(SRC_FILES)
+build/bench: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 	rustc $(RUSTFLAGS) -L $(RUST_PATH) -Z lto --test --cfg bench src/lib.rs -o ./build/bench
 
 scratch: build/scratch
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/scratch
 
-build/scratch: $(REGEXP_MACRO_LIB) scratch.rs
+build/scratch: $(REGEXP_MACRO_LIB) $(REGEXP_MACRO_EXP_LIB) scratch.rs
 	rustc -L $(BUILD_DIR) $(RUSTTESTFLAGS) scratch.rs -o ./build/scratch
 
 ctags:
