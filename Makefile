@@ -10,11 +10,9 @@ REGEXP_LIB_FILES = $(wildcard src/test/*.rs) \
 									 src/unicode.rs src/vm.rs
 REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
 REGEXP_MACRO_LIB_FILES = src/macro.rs
-REGEXP_MACRO_EXP_LIB = $(BUILD_DIR)/.libregexp_macros_exp.timestamp
-REGEXP_MACRO_EXP_LIB_FILES = src/macro_exp.rs
 MOZILLA_RUST ?= $(HOME)/clones/rust
 
-all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB) $(REGEXP_MACRO_EXP_LIB)
+all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 
 install:
 	cargo-lite install
@@ -28,11 +26,6 @@ $(REGEXP_MACRO_LIB): $(REGEXP_MACRO_LIB_FILES)
 	@mkdir -p $(BUILD_DIR)
 	$(RUSTC) -L $(BUILD_DIR) $(RUSTFLAGS) ./src/macro.rs --out-dir=$(BUILD_DIR)
 	@touch $(REGEXP_MACRO_LIB)
-
-$(REGEXP_MACRO_EXP_LIB): $(REGEXP_MACRO_EXP_LIB_FILES)
-	@mkdir -p $(BUILD_DIR)
-	$(RUSTC) -L $(BUILD_DIR) $(RUSTFLAGS) ./src/macro_exp.rs --out-dir=$(BUILD_DIR)
-	@touch $(REGEXP_MACRO_EXP_LIB)
 
 match-tests:
 	./regexp-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
@@ -68,7 +61,7 @@ build/bench: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 scratch: build/scratch
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/scratch
 
-build/scratch: $(REGEXP_MACRO_LIB) $(REGEXP_MACRO_EXP_LIB) scratch.rs
+build/scratch: $(REGEXP_MACRO_LIB) scratch.rs
 	rustc -L $(BUILD_DIR) $(RUSTTESTFLAGS) scratch.rs -o ./build/scratch
 
 ctags:
