@@ -41,7 +41,6 @@ use super::compile::{
 };
 use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 
-pub type CapturePairs = Vec<Option<(uint, uint)>>;
 pub type CaptureLocs = Vec<Option<uint>>;
 
 pub enum MatchKind {
@@ -60,8 +59,8 @@ pub enum MatchKind {
 /// entire match or the locations of the entire match in addition to the
 /// locations of each submatch.
 pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
-                   start: uint, end: uint) -> CapturePairs {
-    unflatten_capture_locations(Nfa {
+                   start: uint, end: uint) -> CaptureLocs {
+    Nfa {
         which: which,
         prog: prog,
         insts: prog.insts.as_slice(),
@@ -75,23 +74,7 @@ pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
             cur: None,
             next: 0,
         },
-    }.run())
-}
-
-/// Converts the capture indices returned by a VM into tuples. It also makes
-/// sure that the following invariant holds: for a particular capture group
-/// k, the slots 2k and 2k+1 must both contain a location or must both be done
-/// by the time the VM is done executing. (Otherwise there is a bug in the VM.)
-fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
-    let mut caps = Vec::with_capacity(locs.len() / 2);
-    for win in locs.as_slice().chunks(2) {
-        match (win[0], win[1]) {
-            (Some(s), Some(e)) => caps.push(Some((s, e))),
-            (None, None) => caps.push(None),
-            wins => fail!("BUG: Invalid capture group: {}", wins),
-        }
-    }
-    caps
+    }.run()
 }
 
 struct Nfa<'r, 't> {

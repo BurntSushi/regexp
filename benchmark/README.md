@@ -4,38 +4,34 @@ Rust
 rustc --opt-level=3 -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
 ./build/bench --bench
 
-literal                                 435 ns/iter (+/- 2)
-not_literal                            1967 ns/iter (+/- 10)
-match_class                            2545 ns/iter (+/- 17)
-match_class_in_range                   2644 ns/iter (+/- 34)
-replace_all                            6224 ns/iter (+/- 398)
-anchored_literal_short_non_match        991 ns/iter (+/- 4)
-anchored_literal_long_non_match        9119 ns/iter (+/- 20)
-anchored_literal_short_match            571 ns/iter (+/- 4)
-anchored_literal_long_match             565 ns/iter (+/- 2)
-one_pass_short_a                       2149 ns/iter (+/- 17)
-one_pass_short_a_not                   2644 ns/iter (+/- 27)
-one_pass_short_b                       1565 ns/iter (+/- 7)
-one_pass_short_b_not                   2157 ns/iter (+/- 10)
-one_pass_long_prefix                   1281 ns/iter (+/- 11)
-one_pass_long_prefix_not               1234 ns/iter (+/- 6)
-easy0_32                                651 ns/iter (+/- 4) = 49 MB/s
-easy0_1K                               2123 ns/iter (+/- 115) = 482 MB/s
-easy0_32K                             48763 ns/iter (+/- 896) = 671 MB/s
-easy0_1M                            1545978 ns/iter (+/- 5075) = 677 MB/s
-easy1_32                                609 ns/iter (+/- 154) = 52 MB/s
-easy1_1K                               3091 ns/iter (+/- 815) = 331 MB/s
-easy1_32K                             83045 ns/iter (+/- 4995) = 394 MB/s
-easy1_1M                            2654424 ns/iter (+/- 34276) = 394 MB/s
-medium_32                              1648 ns/iter (+/- 63) = 19 MB/s
-medium_1K                             33882 ns/iter (+/- 838) = 30 MB/s
-medium_32K                          1072079 ns/iter (+/- 5921) = 30 MB/s
-medium_1M                          34140609 ns/iter (+/- 51115) = 30 MB/s
-hard_32                                2479 ns/iter (+/- 40) = 12 MB/s
-hard_1K                               54950 ns/iter (+/- 255) = 18 MB/s
-hard_32K                            1738851 ns/iter (+/- 3483) = 18 MB/s
-hard_1M                            55405512 ns/iter (+/- 40061) = 18 MB/s
-no_exponential                       269850 ns/iter (+/- 380)
+literal                                 427 ns/iter (+/- 2)
+not_literal                            1917 ns/iter (+/- 9)
+match_class                            2470 ns/iter (+/- 17)
+match_class_in_range                   2603 ns/iter (+/- 20)
+replace_all                            5267 ns/iter (+/- 488)
+anchored_literal_short_non_match        966 ns/iter (+/- 11)
+anchored_literal_long_non_match        9151 ns/iter (+/- 57)
+anchored_literal_short_match            554 ns/iter (+/- 3)
+anchored_literal_long_match             558 ns/iter (+/- 326)
+one_pass_short_a                       2027 ns/iter (+/- 9)
+one_pass_short_a_not                   2629 ns/iter (+/- 11)
+one_pass_short_b                       1412 ns/iter (+/- 9)
+one_pass_short_b_not                   2270 ns/iter (+/- 13)
+one_pass_long_prefix                   1162 ns/iter (+/- 7)
+one_pass_long_prefix_not               1218 ns/iter (+/- 14)
+easy0_32                                571 ns/iter (+/- 4) = 56 MB/s
+easy0_1K                               2329 ns/iter (+/- 108) = 439 MB/s
+easy0_32K                             57318 ns/iter (+/- 696) = 571 MB/s
+easy1_32                                619 ns/iter (+/- 140) = 51 MB/s
+easy1_1K                               3402 ns/iter (+/- 754) = 300 MB/s
+easy1_32K                             91339 ns/iter (+/- 4898) = 358 MB/s
+medium_32                              1597 ns/iter (+/- 60) = 20 MB/s
+medium_1K                             33650 ns/iter (+/- 850) = 30 MB/s
+medium_32K                          1084546 ns/iter (+/- 7376) = 30 MB/s
+hard_32                                2427 ns/iter (+/- 32) = 13 MB/s
+hard_1K                               55622 ns/iter (+/- 733) = 18 MB/s
+hard_32K                            1742869 ns/iter (+/- 5223) = 18 MB/s
+no_exponential                       271210 ns/iter (+/- 241)
 ```
 
 Golang
