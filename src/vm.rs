@@ -50,14 +50,15 @@ pub enum MatchKind {
     Submatches,
 }
 
-/// Runs an NFA simulation on the list of instructions and input given. (The
-/// input must have been decoded into a slice of UTF8 characters.)
-/// If 'caps' is true, then capture groups are tracked. When false, capture
-/// groups (and 'Save' instructions) are ignored.
+/// Runs an NFA simulation on the compiled expression given on the search text
+/// `input`. The search begins at byte index `start` and ends at byte index
+/// `end`. (The range is specified here so that zero-width assertions will work
+/// correctly when searching for successive non-overlapping matches.)
 ///
-/// Note that if 'caps' is false, the capture indices returned will always be
-/// one of two values: `vec!(None)` for no match or `vec!(Some((0, 0)))` for
-/// a match.
+/// The `which` parameter indicates what kind of capture information the caller
+/// wants. There are three choices: match existence only, the location of the
+/// entire match or the locations of the entire match in addition to the
+/// locations of each submatch.
 pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
                    start: uint, end: uint) -> CapturePairs {
     unflatten_capture_locations(Nfa {
