@@ -41,8 +41,7 @@ use super::compile::{
 };
 use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 
-pub type CapturePairs = Vec<Option<(uint, uint)>>;
-pub type CaptureLocs = Vec<Option<uint>>;
+pub type CaptureLocs = ~[Option<uint>];
 
 pub enum MatchKind {
     Exists,
@@ -60,8 +59,8 @@ pub enum MatchKind {
 /// entire match or the locations of the entire match in addition to the
 /// locations of each submatch.
 pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
-                   start: uint, end: uint) -> CapturePairs {
-    unflatten_capture_locations(Nfa {
+                   start: uint, end: uint) -> CaptureLocs {
+    Nfa {
         which: which,
         prog: prog,
         insts: prog.insts.as_slice(),
@@ -75,23 +74,7 @@ pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
             cur: None,
             next: 0,
         },
-    }.run())
-}
-
-/// Converts the capture indices returned by a VM into tuples. It also makes
-/// sure that the following invariant holds: for a particular capture group
-/// k, the slots 2k and 2k+1 must both contain a location or must both be done
-/// by the time the VM is done executing. (Otherwise there is a bug in the VM.)
-fn unflatten_capture_locations(locs: CaptureLocs) -> CapturePairs {
-    let mut caps = Vec::with_capacity(locs.len() / 2);
-    for win in locs.as_slice().chunks(2) {
-        match (win[0], win[1]) {
-            (Some(s), Some(e)) => caps.push(Some((s, e))),
-            (None, None) => caps.push(None),
-            wins => fail!("BUG: Invalid capture group: {}", wins),
-        }
-    }
-    caps
+    }.run()
 }
 
 struct Nfa<'r, 't> {
@@ -182,7 +165,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 let step_state = self.step(groups.as_mut_slice(), nlist,
                                            clist.groups(i), pc);
                 match step_state {
-                    StepMatchEarlyReturn => return vec!(Some(0), Some(0)),
+                    StepMatchEarlyReturn => return ~[Some(0), Some(0)],
                     StepMatch => { matched = true; clist.empty() },
                     StepContinue => {},
                 }
@@ -192,9 +175,9 @@ impl<'r, 't> Nfa<'r, 't> {
             nlist.empty();
         }
         match self.which {
-            Exists if matched     => vec!(Some(0), Some(0)),
-            Exists                => vec!(None, None),
-            Location | Submatches => groups,
+            Exists if matched     => ~[Some(0), Some(0)],
+            Exists                => ~[None, None],
+            Location | Submatches => groups.as_slice().into_owned(),
         }
     }
 
@@ -419,13 +402,7 @@ impl<'t> CharReader<'t> {
 
 struct Thread {
     pc: uint,
-    groups: CaptureLocs,
-}
-
-impl Thread {
-    fn new(pc: uint, groups: CaptureLocs) -> Thread {
-        Thread { pc: pc, groups: groups }
-    }
+    groups: Vec<Option<uint>>,
 }
 
 struct Threads {
@@ -447,7 +424,7 @@ impl Threads {
         Threads {
             which: which,
             queue: Vec::from_fn(num_insts, |_| {
-                Thread::new(0, Vec::from_elem(num_caps * 2, None))
+                Thread { pc: 0, groups: Vec::from_elem(num_caps * 2, None) }
             }),
             sparse: Vec::from_elem(num_insts, 0u),
             size: 0,

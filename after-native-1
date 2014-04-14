@@ -1,0 +1,54 @@
+rustc --opt-level=3 -g ./src/lib.rs --out-dir=./build/
+rustc -L ./build/ --opt-level=3 -g ./src/macro.rs --out-dir=./build/
+rustc -L ./build/ --opt-level=3 -g ./src/macro_exp.rs --out-dir=./build/
+rustc --opt-level=3 -g -L ./build/ --test --cfg bench src/lib.rs -o ./build/bench
+src/test/bench.rs:149:1: 149:61 warning: code is never used: `EASY0`, #[warn(dead_code)] on by default
+src/test/bench.rs:149 static EASY0: &'static str  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ$";
+                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/test/bench.rs:150:1: 150:81 warning: code is never used: `EASY1`, #[warn(dead_code)] on by default
+src/test/bench.rs:150 static EASY1: &'static str  = "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$";
+                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/test/bench.rs:151:1: 151:66 warning: code is never used: `MEDIUM`, #[warn(dead_code)] on by default
+src/test/bench.rs:151 static MEDIUM: &'static str = "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$";
+                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/test/bench.rs:152:1: 152:67 warning: code is never used: `HARD`, #[warn(dead_code)] on by default
+src/test/bench.rs:152 static HARD: &'static str   = "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$";
+                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench
+
+running 32 tests
+test test::bench::anchored_literal_long_match      ... [36mbench(B[m:       657 ns/iter (+/- 19)
+test test::bench::anchored_literal_long_non_match  ... [36mbench(B[m:     44168 ns/iter (+/- 724)
+test test::bench::anchored_literal_short_match     ... [36mbench(B[m:       645 ns/iter (+/- 39)
+test test::bench::anchored_literal_short_non_match ... [36mbench(B[m:      3085 ns/iter (+/- 229)
+test test::bench::easy0_1K                         ... [36mbench(B[m:      2320 ns/iter (+/- 498) = 441 MB/s
+test test::bench::easy0_1M                         ... [36mbench(B[m:   1900092 ns/iter (+/- 46945) = 551 MB/s
+test test::bench::easy0_32                         ... [36mbench(B[m:       109 ns/iter (+/- 3) = 293 MB/s
+test test::bench::easy0_32K                        ... [36mbench(B[m:     58248 ns/iter (+/- 1094) = 562 MB/s
+test test::bench::easy1_1K                         ... [36mbench(B[m:      4929 ns/iter (+/- 3510) = 207 MB/s
+test test::bench::easy1_1M                         ... [36mbench(B[m:   4815756 ns/iter (+/- 136274) = 217 MB/s
+test test::bench::easy1_32                         ... [36mbench(B[m:       105 ns/iter (+/- 332) = 304 MB/s
+test test::bench::easy1_32K                        ... [36mbench(B[m:    151861 ns/iter (+/- 18051) = 215 MB/s
+test test::bench::hard_1K                          ... [36mbench(B[m:    171220 ns/iter (+/- 7262) = 5 MB/s
+test test::bench::hard_1M                          ... [36mbench(B[m: 175364318 ns/iter (+/- 1486500) = 5 MB/s
+test test::bench::hard_32                          ... [36mbench(B[m:      5691 ns/iter (+/- 99) = 5 MB/s
+test test::bench::hard_32K                         ... [36mbench(B[m:   5524404 ns/iter (+/- 93275) = 5 MB/s
+test test::bench::literal                          ... [36mbench(B[m:       180 ns/iter (+/- 14)
+test test::bench::match_class                      ... [36mbench(B[m:      4197 ns/iter (+/- 35)
+test test::bench::match_class_in_range             ... [36mbench(B[m:      4406 ns/iter (+/- 65)
+test test::bench::medium_1K                        ... [36mbench(B[m:    149404 ns/iter (+/- 5578) = 6 MB/s
+test test::bench::medium_1M                        ... [36mbench(B[m: 152858465 ns/iter (+/- 1568772) = 6 MB/s
+test test::bench::medium_32                        ... [36mbench(B[m:      4934 ns/iter (+/- 74) = 6 MB/s
+test test::bench::medium_32K                       ... [36mbench(B[m:   4765932 ns/iter (+/- 41380) = 6 MB/s
+test test::bench::no_exponential                   ... [36mbench(B[m:    290823 ns/iter (+/- 8385)
+test test::bench::not_literal                      ... [36mbench(B[m:      2941 ns/iter (+/- 89)
+test test::bench::one_pass_long_prefix             ... [36mbench(B[m:      4480 ns/iter (+/- 93)
+test test::bench::one_pass_long_prefix_not         ... [36mbench(B[m:      4515 ns/iter (+/- 82)
+test test::bench::one_pass_short_a                 ... [36mbench(B[m:      3574 ns/iter (+/- 55)
+test test::bench::one_pass_short_a_not             ... [36mbench(B[m:      3603 ns/iter (+/- 83)
+test test::bench::one_pass_short_b                 ... [36mbench(B[m:      2390 ns/iter (+/- 21)
+test test::bench::one_pass_short_b_not             ... [36mbench(B[m:      2419 ns/iter (+/- 29)
+test test::bench::replace_all                      ... [36mbench(B[m:      3782 ns/iter (+/- 308)
+
+test result: [32mok(B[m. 0 passed; 0 failed; 0 ignored; 32 measured
+

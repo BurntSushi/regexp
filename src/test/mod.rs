@@ -8,8 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[phase(syntax)]
+extern crate regexp_macros_exp;
+
+#[cfg(bench)]
 mod bench;
-#[cfg(not(stage1))]
+#[cfg(not(bench), not(stage1))]
 mod macro;
+#[cfg(not(bench))]
 mod tests;
 

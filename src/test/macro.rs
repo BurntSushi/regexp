@@ -8,15 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[phase(syntax)]
-extern crate regexp_macros;
-
 use regexp::Regexp;
+
+// #[test] 
+// fn re_replace() { 
+    // static names: Dynamic = 
+        // regexp!(r"(?P<first>\S+)\s+(?P<last>\S+)(?P<space>\s*)"); 
+    // let result = names.replace_all("w1 w2 w3 w4", "$last $first$space"); 
+    // assert_eq!(result, ~"w2 w1 w4 w3"); 
+// } 
 
 #[test]
 fn re_replace() {
-    static names: Regexp =
-        regexp!(r"(?P<first>\S+)\s+(?P<last>\S+)(?P<space>\s*)");
+    let names =
+        nregexp!(r"(?P<first>\S+)\s+(?P<last>\S+)(?P<space>\s*)");
     let result = names.replace_all("w1 w2 w3 w4", "$last $first$space");
     assert_eq!(result, ~"w2 w1 w4 w3");
 }

@@ -4,7 +4,7 @@
 extern crate regexp;
 extern crate sync;
 
-use regexp::{NoExpand, regexp};
+use regexp::{NoExpand, Regexp, regexp};
 use sync::Arc;
  
 static VARIANTS: &'static [&'static str] = &'static [

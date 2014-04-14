@@ -11,37 +11,37 @@
 use rand::{Rng, task_rng};
 use stdtest::Bencher;
 use std::str;
-use super::super::{Regexp, NoExpand};
+use regexp::{Regexp, Dynamic, NoExpand};
 
-fn bench_assert_match(b: &mut Bencher, re: Regexp, text: &str) {
+fn bench_assert_match<R: Regexp>(b: &mut Bencher, re: R, text: &str) {
     b.iter(|| if !re.is_match(text) { fail!("no match") });
 }
 
 #[bench]
 fn no_exponential(b: &mut Bencher) {
     let n = 100;
-    let re = Regexp::new("a?".repeat(n) + "a".repeat(n)).unwrap();
+    let re = Dynamic::new("a?".repeat(n) + "a".repeat(n)).unwrap();
     let text = "a".repeat(n);
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn literal(b: &mut Bencher) {
-    let re = Regexp::new("y").unwrap();
+    let re = nregexp!("y");
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn not_literal(b: &mut Bencher) {
-    let re = Regexp::new(".y").unwrap();
+    let re = nregexp!(".y");
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn match_class(b: &mut Bencher) {
-    let re = Regexp::new("[abcdw]").unwrap();
+    let re = nregexp!("[abcdw]");
     let text = "xxxx".repeat(20) + "w";
     bench_assert_match(b, re, text);
 }
@@ -49,14 +49,14 @@ fn match_class(b: &mut Bencher) {
 #[bench]
 fn match_class_in_range(b: &mut Bencher) {
     // 'b' is between 'a' and 'c', so the class range checking doesn't help.
-    let re = Regexp::new("[ac]").unwrap();
+    let re = nregexp!("[ac]");
     let text = "bbbb".repeat(20) + "c";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn replace_all(b: &mut Bencher) {
-    let re = Regexp::new("[cjrw]").unwrap();
+    let re = nregexp!("[cjrw]");
     let text = "abcdefghijklmnopqrstuvwxyz";
     // FIXME: This isn't using the $name expand stuff.
     // It's possible RE2/Go is using it, but currently, the expand in this
@@ -66,79 +66,79 @@ fn replace_all(b: &mut Bencher) {
 
 #[bench]
 fn anchored_literal_short_non_match(b: &mut Bencher) {
-    let re = Regexp::new("^zbc(d|e)").unwrap();
+    let re = nregexp!("^zbc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn anchored_literal_long_non_match(b: &mut Bencher) {
-    let re = Regexp::new("^zbc(d|e)").unwrap();
+    let re = nregexp!("^zbc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn anchored_literal_short_match(b: &mut Bencher) {
-    let re = Regexp::new("^.bc(d|e)").unwrap();
+    let re = nregexp!("^.bc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn anchored_literal_long_match(b: &mut Bencher) {
-    let re = Regexp::new("^.bc(d|e)").unwrap();
+    let re = nregexp!("^.bc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_a(b: &mut Bencher) {
-    let re = Regexp::new("^.bc(d|e)*$").unwrap();
+    let re = nregexp!("^.bc(d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_a_not(b: &mut Bencher) {
-    let re = Regexp::new(".bc(d|e)*$").unwrap();
+    let re = nregexp!(".bc(d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_b(b: &mut Bencher) {
-    let re = Regexp::new("^.bc(?:d|e)*$").unwrap();
+    let re = nregexp!("^.bc(?:d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_b_not(b: &mut Bencher) {
-    let re = Regexp::new(".bc(?:d|e)*$").unwrap();
+    let re = nregexp!(".bc(?:d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_long_prefix(b: &mut Bencher) {
-    let re = Regexp::new("^abcdefghijklmnopqrstuvwxyz.*$").unwrap();
+    let re = nregexp!("^abcdefghijklmnopqrstuvwxyz.*$");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_long_prefix_not(b: &mut Bencher) {
-    let re = Regexp::new("^.bcdefghijklmnopqrstuvwxyz.*$").unwrap();
+    let re = nregexp!("^.bcdefghijklmnopqrstuvwxyz.*$");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 macro_rules! throughput(
-    ($name:ident, $regex:ident, $size:expr) => (
+    ($name:ident, $regex:expr, $size:expr) => (
         #[bench]
         fn $name(b: &mut Bencher) {
-            let re = Regexp::new($regex).unwrap();
+            let re = nregexp!($regex);
             let text = gen_text($size);
             b.bytes = $size;
             b.iter(|| if re.is_match(text) { fail!("match") });
@@ -167,27 +167,27 @@ fn gen_text(n: uint) -> ~str {
 // I actually think this is the fault of the microbenchmark facilities built
 // into rustc. Go's microbenchmarking seems to handle things fine.
 
-throughput!(easy0_32, EASY0, 32)
-throughput!(easy0_1K, EASY0, 1<<10)
-throughput!(easy0_32K, EASY0, 32<<10)
-// throughput!(easy0_1M, EASY0, 1<<20) 
+throughput!(easy0_32, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32)
+throughput!(easy0_1K, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<10)
+throughput!(easy0_32K, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32<<10)
+throughput!(easy0_1M, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<20)
 // throughput!(easy0_32M, EASY0, 32<<20) 
 
-throughput!(easy1_32, EASY1, 32)
-throughput!(easy1_1K, EASY1, 1<<10)
-throughput!(easy1_32K, EASY1, 32<<10)
-// throughput!(easy1_1M, EASY1, 1<<20) 
+throughput!(easy1_32, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 32)
+throughput!(easy1_1K, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 1<<10)
+throughput!(easy1_32K, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 32<<10)
+throughput!(easy1_1M, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 1<<20)
 // throughput!(easy1_32M, EASY1, 32<<20) 
 
-throughput!(medium_32, MEDIUM, 32)
-throughput!(medium_1K, MEDIUM, 1<<10)
-throughput!(medium_32K, MEDIUM, 32<<10)
-// throughput!(medium_1M, MEDIUM, 1<<20) 
+throughput!(medium_32, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32)
+throughput!(medium_1K, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<10)
+throughput!(medium_32K, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32<<10)
+throughput!(medium_1M, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<20)
 // throughput!(medium_32M, MEDIUM, 32<<20) 
 
-throughput!(hard_32, HARD, 32)
-throughput!(hard_1K, HARD, 1<<10)
-throughput!(hard_32K, HARD, 32<<10)
-// throughput!(hard_1M, HARD, 1<<20) 
+throughput!(hard_32, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32)
+throughput!(hard_1K, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<10)
+throughput!(hard_32K, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32<<10)
+throughput!(hard_1M, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<20)
 // throughput!(hard_32M, HARD, 32<<20) 
 

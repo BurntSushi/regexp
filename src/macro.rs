@@ -34,7 +34,7 @@ use syntax::parse;
 use syntax::parse::token;
 use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 
-use regexp::Regexp;
+use regexp::Dynamic;
 use regexp::program::{
     MaybeStatic, Flags,
     Inst, OneChar, CharClass, Any, Save, Jump, Split,
@@ -57,7 +57,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         Some(re) => re,
         None => return MacResult::dummy_expr(sp),
     };
-    let re = match Regexp::new(restr.to_owned()) {
+    let re = match Dynamic::new(restr.to_owned()) {
         Ok(re) => re,
         Err(err) => {
             cx.span_err(sp, err.to_str());
@@ -78,7 +78,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     );
     let prefix = re.p.prefix.as_slice();
     MRExpr(quote_expr!(&*cx,
-        ::regexp::Regexp {
+        ::regexp::Dynamic {
             p: ::regexp::program::Program {
                 regex: ::std::str::Slice($restr),
                 insts: ::regexp::program::Static($insts),

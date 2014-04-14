@@ -8,11 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::{Regexp, NoExpand};
+use regexp::{Regexp, Dynamic, NoExpand};
 
 #[test]
 fn splitn() {
-    let re = Regexp::new(r"\d+").unwrap();
+    let re = nregexp!(r"\d+");
     let text = "cauchy123plato456tyler789binx";
     let subs: Vec<&str> = re.splitn(text, 2).collect();
     assert_eq!(subs, vec!("cauchy", "plato456tyler789binx"));
@@ -20,7 +20,7 @@ fn splitn() {
 
 #[test]
 fn split() {
-    let re = Regexp::new(r"\d+").unwrap();
+    let re = nregexp!(r"\d+");
     let text = "cauchy123plato456tyler789binx";
     let subs: Vec<&str> = re.split(text).collect();
     assert_eq!(subs, vec!("cauchy", "plato", "tyler", "binx"));
@@ -31,7 +31,7 @@ macro_rules! replace(
      $search:expr, $replace:expr, $result:expr) => (
         #[test]
         fn $name() {
-            let re = Regexp::new($re).unwrap();
+            let re = nregexp!($re);
             assert_eq!(re.$which($search, $replace), $result);
         }
     );
@@ -56,7 +56,7 @@ macro_rules! noparse(
         #[test]
         fn $name() {
             let re = $re;
-            match Regexp::new(re) {
+            match Dynamic::new(re) {
                 Err(_) => {},
                 Ok(_) => fail!("Regexp '{}' should cause a parse error.", re),
             }
@@ -101,13 +101,9 @@ macro_rules! mat(
     ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
         #[test]
         fn $name() {
-            let re = $re;
             let text = $text;
             let expected: Vec<Option<(uint, uint)>> = vec!($($loc)+);
-            let r = match Regexp::new(re) {
-                Ok(r) => r,
-                Err(err) => fail!("Could not compile '{}': {}", re, err),
-            };
+            let r = nregexp!($re);
             let got = match r.captures(text) {
                 Some(c) => c.iter_pos().collect::<Vec<Option<(uint, uint)>>>(),
                 None => vec!(None),
@@ -120,7 +116,7 @@ macro_rules! mat(
             }
             if sexpect != sgot {
                 fail!("For RE '{}' against '{}', expected '{}' but got '{}'",
-                      re, text, sexpect, sgot);
+                      $re, text, sexpect, sgot);
             }
         }
     );

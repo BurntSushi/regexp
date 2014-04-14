@@ -367,16 +367,19 @@ extern crate stdtest = "test";
 #[cfg(test)]
 extern crate rand;
 
+#[phase(syntax, link)] extern crate log;
+
 // During tests, this links with the `regexp` crate so that the `regexp!` macro
 // can be tested.
 #[cfg(test, not(stage1))]
 extern crate regexp;
 
 pub use parse::Error;
-pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
+pub use re::{Regexp, Dynamic, Captures, SubCaptures, SubCapturesPos};
 pub use re::{FindCaptures, FindMatches};
 pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
 pub use re::{quote, is_match, regexp};
+pub use vm::{MatchKind, Exists, Location, Submatches};
 
 mod compile;
 mod parse;
