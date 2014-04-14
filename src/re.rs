@@ -31,7 +31,7 @@ pub fn quote(text: &str) -> ~str {
 
 /// Compiles a regular expression. Calls `fail!` for invalid expressions.
 ///
-/// Note that when possible, you should prefer the `re!` macro instead of
+/// Note that when possible, you should prefer the `regexp!` macro instead of
 /// this function.
 pub fn regexp(regex: &str) -> Regexp {
     match Regexp::new(regex) {
@@ -83,7 +83,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// assert_eq!(re.find("phone: 111-222-3333"), Some((7, 19)));
 /// ```
 ///
-/// You can also use the `re!` macro to compile a regular expression when
+/// You can also use the `regexp!` macro to compile a regular expression when
 /// you compile your program:
 ///
 /// ```rust
@@ -92,22 +92,22 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// #[phase(syntax)] extern crate regexp_macros;
 ///
 /// fn main() {
-///     static re: regexp::Regexp = re!(r"\d+");
+///     static re: regexp::Regexp = regexp!(r"\d+");
 ///     assert_eq!(re.find("123 abc"), Some((0, 3)));
 /// }
 /// ```
 ///
-/// `re!` can also be declared with `static` in a module scope.
-/// Given an incorrect regular expression, `re!` will cause the Rust compiler 
-/// to produce a compile time error.
-/// More details about the `re!` macro can be found in the `regexp` crate
+/// `regexp!` can also be declared with `static` in a module scope.
+/// Given an incorrect regular expression, `regexp!` will cause the Rust 
+/// compiler to produce a compile time error.
+/// More details about the `regexp!` macro can be found in the `regexp` crate
 /// documentation.
 pub struct Regexp {
-    /// The representation of `Regexp` is exported to support the `re!`
+    /// The representation of `Regexp` is exported to support the `regexp!`
     /// syntax extension. Do not rely on it.
     ///
     /// See the comments for the `program` module in `lib.rs` for a more
-    /// detailed explanation for what `re!` requires.
+    /// detailed explanation for what `regexp!` requires.
     #[doc(hidden)]
     pub p: Program,
 }
@@ -191,7 +191,7 @@ impl Regexp {
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
-    /// static re: Regexp = re!(r"[ \t]+");
+    /// static re: Regexp = regexp!(r"[ \t]+");
     /// let fields: Vec<&str> = re.split("a b \t  c\td    e").collect();
     /// assert_eq!(fields, vec!("a", "b", "c", "d", "e"));
     /// # }
@@ -222,7 +222,7 @@ impl Regexp {
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
-    /// static re: Regexp = re!(r"\W+");
+    /// static re: Regexp = regexp!(r"\W+");
     /// let fields: Vec<&str> = re.splitn("Hey! How are you?", 3).collect();
     /// assert_eq!(fields, vec!("Hey", "How", "are you?"));
     /// # }
@@ -252,7 +252,7 @@ impl Regexp {
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
-    /// static re: Regexp = re!("[^01]+");
+    /// static re: Regexp = regexp!("[^01]+");
     /// assert_eq!(re.replace("1078910", ""), ~"1010");
     /// # }
     /// ```
@@ -266,7 +266,7 @@ impl Regexp {
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::{Regexp, Captures}; fn main() {
-    /// static re: Regexp = re!(r"([^,\s]+),\s+(\S+)");
+    /// static re: Regexp = regexp!(r"([^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
     ///     format!("{} {}", caps.at(2), caps.at(1))
     /// });
@@ -283,7 +283,7 @@ impl Regexp {
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::Regexp; fn main() {
-    /// static re: Regexp = re!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
+    /// static re: Regexp = regexp!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
     /// assert_eq!(result, ~"Bruce Springsteen");
     /// # }
@@ -300,7 +300,7 @@ impl Regexp {
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # use regexp::{Regexp, NoExpand}; fn main() {
-    /// static re: Regexp = re!(r"(?P<last>[^,\s]+),\s+(\S+)");
+    /// static re: Regexp = regexp!(r"(?P<last>[^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
     /// assert_eq!(result, ~"$2 $last");
     /// # }

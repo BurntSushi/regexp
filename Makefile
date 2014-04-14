@@ -7,6 +7,7 @@ RUSTTESTFLAGS ?= -L $(RUST_PATH)
 SRC_FILES = $(wildcard src/*.rs) $(wildcard src/test/*.rs)
 REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
 REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
+MOZILLA_RUST ?= $(HOME)/clones/rust
 
 all: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
 
@@ -69,4 +70,10 @@ clean:
 push:
 	git push origin master
 	git push github master
+
+mozilla:
+	rm -rf $(MOZILLA_RUST)/src/libregexp/*
+	cp -a ./src/* $(MOZILLA_RUST)/src/libregexp/
+	rm $(MOZILLA_RUST)/src/libregexp/macro.rs
+	cp ./src/macro.rs $(MOZILLA_RUST)/src/libregexp_macros/lib.rs
 

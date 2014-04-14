@@ -162,31 +162,32 @@ fn gen_text(n: uint) -> ~str {
     str::from_utf8(bytes).unwrap().to_owned()
 }
 
-// The 32MB tests take too damn long.
+// The 1MB/32MB benchmarks take too damn long and they typically aren't
+// substantially different from the 32K benchmarks.
 // I actually think this is the fault of the microbenchmark facilities built
 // into rustc. Go's microbenchmarking seems to handle things fine.
 
 throughput!(easy0_32, EASY0, 32)
 throughput!(easy0_1K, EASY0, 1<<10)
 throughput!(easy0_32K, EASY0, 32<<10)
-throughput!(easy0_1M, EASY0, 1<<20)
+// throughput!(easy0_1M, EASY0, 1<<20) 
 // throughput!(easy0_32M, EASY0, 32<<20) 
 
 throughput!(easy1_32, EASY1, 32)
 throughput!(easy1_1K, EASY1, 1<<10)
 throughput!(easy1_32K, EASY1, 32<<10)
-throughput!(easy1_1M, EASY1, 1<<20)
+// throughput!(easy1_1M, EASY1, 1<<20) 
 // throughput!(easy1_32M, EASY1, 32<<20) 
 
 throughput!(medium_32, MEDIUM, 32)
 throughput!(medium_1K, MEDIUM, 1<<10)
 throughput!(medium_32K, MEDIUM, 32<<10)
-throughput!(medium_1M, MEDIUM, 1<<20)
+// throughput!(medium_1M, MEDIUM, 1<<20) 
 // throughput!(medium_32M, MEDIUM, 32<<20) 
 
 throughput!(hard_32, HARD, 32)
 throughput!(hard_1K, HARD, 1<<10)
 throughput!(hard_32K, HARD, 32<<10)
-throughput!(hard_1M, HARD, 1<<20)
+// throughput!(hard_1M, HARD, 1<<20) 
 // throughput!(hard_32M, HARD, 32<<20) 
 

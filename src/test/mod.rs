@@ -8,10 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(bench)]
 mod bench;
-#[cfg(not(bench))]
+#[cfg(not(stage1))]
 mod macro;
-#[cfg(not(bench))]
 mod tests;
 

@@ -16,10 +16,10 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://static.rust-lang.org/doc/master")]
 
-#![feature(macro_rules, phase, macro_registrar, managed_boxes, quote)]
+#![feature(macro_registrar, managed_boxes, quote)]
 
-//! This crate provides the `re!` macro. Its use is documented in the
-//! [`regexp` crate](http://burntsushi.net/rustdoc/regexp/).
+//! This crate provides the `regexp!` macro. Its use is documented in the 
+//! `regexp` crate.
 
 extern crate regexp;
 extern crate syntax;
@@ -41,10 +41,10 @@ use regexp::program::{
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
 };
 
-/// For the `re!` syntax extension. Do not use.
+/// For the `regexp!` syntax extension. Do not use.
 #[macro_registrar]
 pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
-    reg(token::intern("re"),
+    reg(token::intern("regexp"),
         NormalTT(~BasicMacroExpander {
             expander: re_static,
             span: None,

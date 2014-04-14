@@ -9,7 +9,7 @@
 // except according to those terms.
 
 // Enable this to squash warnings due to exporting pieces of the representation
-// for use with the re! macro. See lib.rs for explanation.
+// for use with the regexp! macro. See lib.rs for explanation.
 #![allow(visible_private_types)]
 
 use std::cmp;
@@ -97,7 +97,7 @@ pub enum Inst {
 ///
 /// All of the data in a compiled expression is wrapped in "MaybeStatic" or
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
-/// (This makes it convenient and efficient for use with the `re!` macro.)
+/// (This makes it convenient and efficient for use with the `regexp!` macro.)
 pub struct Program {
     // A copy of the original regular expression.
     // It's not currently used.

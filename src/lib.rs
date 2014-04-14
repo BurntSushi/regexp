@@ -52,16 +52,16 @@
 //! not process any escape sequences. For example, `"\\d"` is the same 
 //! expression as `r"\d"`.
 //!
-//! # The `re!` macro
+//! # The `regexp!` macro
 //!
 //! Rust's compile time meta-programming facilities provide a way to write an 
-//! `re!` macro which compiles regular expressions *when your program 
-//! compiles*. Said differently, if you only use `re!` to build regular 
+//! `regexp!` macro which compiles regular expressions *when your program 
+//! compiles*. Said differently, if you only use `regexp!` to build regular 
 //! expressions in your program, then your program cannot compile with an 
 //! invalid regular expression.
 //!
-//! To use the `re!` macro, you must enable the `phase` feature and import the 
-//! `regexp_macros` crate as a syntax extension:
+//! To use the `regexp!` macro, you must enable the `phase` feature and import 
+//! the `regexp_macros` crate as a syntax extension:
 //!
 //! ```rust
 //! #![feature(phase)]
@@ -70,28 +70,28 @@
 //! extern crate regexp;
 //!
 //! fn main() {
-//!     static re: regexp::Regexp = re!(r"^\d{4}-\d{2}-\d{2}$");
+//!     static re: regexp::Regexp = regexp!(r"^\d{4}-\d{2}-\d{2}$");
 //!     assert_eq!(re.is_match("2014-01-01"), true);
 //! }
 //! ```
 //!
-//! There are a few things worth mentioning about using the `re!` macro. 
+//! There are a few things worth mentioning about using the `regexp!` macro. 
 //! Firstly, it compiles an expression to *static* data, which means it can 
 //! live in the module scope in addition to function scope (as shown in the 
 //! previous example).
-//! Secondly, the `re!` macro *only* accepts string *literals*.
+//! Secondly, the `regexp!` macro *only* accepts string *literals*.
 //! Thirdly, the `regexp` crate *must* be linked with the name `regexp` since 
 //! the generated code depends on finding symbols in the `regexp` crate.
 //!
-//! In general, one should use the `re!` macro whenever possible since it 
+//! In general, one should use the `regexp!` macro whenever possible since it 
 //! eliminates an entire class of bugs and incurs no runtime cost for 
 //! compilation of a regular expression. If your regular expression isn't known 
 //! until runtime, then you can use `Regexp::new`.
 //!
-//! Finally, note that an expression of the form `re!("...").is_match("...")` 
-//! is not allowed since `re!` produces static data that must live for the 
-//! lifetime of the program. You must always bind the result of `re!` to some 
-//! named `static` variable.
+//! Finally, note that an expression of the form 
+//! `regexp!("...").is_match("...")` is not allowed since `regexp!` produces 
+//! static data that must live for the lifetime of the program. You must always 
+//! bind the result of `regexp!` to some named `static` variable.
 //!
 //! # Example: iterating over capture groups
 //!
@@ -104,7 +104,7 @@
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
-//! static re: Regexp = re!(r"(\d{4})-(\d{2})-(\d{2})");
+//! static re: Regexp = regexp!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! for cap in re.captures_iter(text) {
 //!     println!("Month: {} Day: {} Year: {}", cap.at(2), cap.at(3), cap.at(1));
@@ -130,7 +130,7 @@
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
-//! static re: Regexp = re!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
+//! static re: Regexp = regexp!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! let after = re.replace_all(before, "$m/$d/$y");
 //! assert_eq!(after, ~"03/14/2012, 01/01/2013 and 07/05/2014");
@@ -176,7 +176,7 @@
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
-//! static re: Regexp = re!(r"(?i)Δ+");
+//! static re: Regexp = regexp!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
 //! # }
 //! ```
@@ -189,7 +189,7 @@
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
-//! static re: Regexp = re!(r"[\pN\p{Greek}\p{Cherokee}]+");
+//! static re: Regexp = regexp!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
 //! # }
 //! ```
@@ -286,7 +286,7 @@
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
 //! # use regexp::Regexp; fn main() {
-//! static re: Regexp = re!(r"(?i)a+(?-i)b+");
+//! static re: Regexp = regexp!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
 //! assert_eq!(cap.at(0), "AaAaAbb");
 //! # }
@@ -362,18 +362,14 @@
 #![feature(macro_rules, phase)]
 
 extern crate collections;
-
-#[cfg(bench)]
+#[cfg(test)]
 extern crate stdtest = "test";
+#[cfg(test)]
+extern crate rand;
 
-// During tests, this links with the `regexp` and `regexp_macros` crates to 
-// provide the `re!` macro (so it can be tested).
-// We don't do this for benchmarks since it (currently) prevents compiling
-// with -Z lto.
-#[cfg(test, not(bench))]
-#[phase(syntax)]
-extern crate regexp_macros;
-#[cfg(test, not(bench))]
+// During tests, this links with the `regexp` crate so that the `regexp!` macro
+// can be tested.
+#[cfg(test, not(stage1))]
 extern crate regexp;
 
 pub use parse::Error;
@@ -390,20 +386,21 @@ mod vm;
 #[cfg(test)]
 mod test;
 
-/// The `program` module exists to support the `re!` macro. Do not use.
+/// The `program` module exists to support the `regexp!` macro. Do not use.
 #[doc(hidden)]
 pub mod program {
     // Exporting this stuff is bad form, but it's necessary for two reasons.
-    // Firstly, the `re!` syntax extension is in a different crate and requires
-    // access to the representation of a regexp (particularly the instruction
-    // set) in order to generate an AST. This could be mitigated if `re!` was
-    // defined in the same crate, but this has undesirable consequences (such
-    // as requiring a dependency on `libsyntax`).
-    // Secondly, the AST generated by `re!` must *also* be able to access the
-    // representation of a regexp program so that it may be constructed
+    // Firstly, the `regexp!` syntax extension is in a different crate and 
+    // requires access to the representation of a regexp (particularly the 
+    // instruction set) in order to generate an AST. This could be mitigated if 
+    // `regexp!` was defined in the same crate, but this has undesirable 
+    // consequences (such as requiring a dependency on `libsyntax`).
+    //
+    // Secondly, the AST generated by `regexp!` must *also* be able to access 
+    // the representation of a regexp program so that it may be constructed
     // staticly. Yes, this means a user program will actually construct a
     // regexp program using actual instructions, but it's all hidden behind the 
-    // `re!` macro. This, AFAIK, is impossible to mitigate.
+    // `regexp!` macro. This, AFAIK, is impossible to mitigate.
     //
     // For similar reasons, the representation of `Regexp` is also exported
     // but is hidden in the public API documentation.
