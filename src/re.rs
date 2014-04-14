@@ -136,7 +136,7 @@ impl Regexp {
     pub fn find(&self, text: &str) -> Option<(uint, uint)> {
         let caps = vm::run(Location, &self.p, text, 0, text.len());
         if has_match(&caps) {
-            Some((caps.get(0).unwrap(), caps.get(1).unwrap()))
+            Some((caps[0].unwrap(), caps[1].unwrap()))
         } else {
             None
         }
@@ -490,12 +490,12 @@ impl<'t> Captures<'t> {
     /// The positions returned are *always* byte indices with respect to the 
     /// original string matched.
     pub fn pos(&self, i: uint) -> Option<(uint, uint)> {
-        if i >= self.len() || self.locs.get(i*2).is_none() {
+        if i >= self.len() || self.locs[i*2].is_none() {
             // VM guarantees that i*2 and i*2+1 are either both Some or
             // both None.
             return None
         }
-        Some((self.locs.get(i*2).unwrap(), self.locs.get(i*2+1).unwrap()))
+        Some((self.locs[i*2].unwrap(), self.locs[i*2+1].unwrap()))
     }
 
     /// Returns the matched string for the capture group `i`.
@@ -635,7 +635,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
             if !has_match(&caps) {
                 return None
             } else {
-                (caps.get(0).unwrap(), caps.get(1).unwrap())
+                (caps[0].unwrap(), caps[1].unwrap())
             };
 
         // Don't accept empty matches immediately following a match.
@@ -678,7 +678,7 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
             if !has_match(&caps) {
                 return None
             } else {
-                (caps.get(0).unwrap(), caps.get(1).unwrap())
+                (caps[0].unwrap(), caps[1].unwrap())
             };
 
         // Don't accept empty matches immediately following a match.
@@ -696,5 +696,5 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
 
 #[inline(always)]
 fn has_match(caps: &CaptureLocs) -> bool {
-    caps.len() >= 2 && caps.get(0).is_some() && caps.get(1).is_some()
+    caps.len() >= 2 && caps[0].is_some() && caps[1].is_some()
 }

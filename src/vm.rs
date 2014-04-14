@@ -41,7 +41,7 @@ use super::compile::{
 };
 use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 
-pub type CaptureLocs = Vec<Option<uint>>;
+pub type CaptureLocs = ~[Option<uint>];
 
 pub enum MatchKind {
     Exists,
@@ -165,7 +165,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 let step_state = self.step(groups.as_mut_slice(), nlist,
                                            clist.groups(i), pc);
                 match step_state {
-                    StepMatchEarlyReturn => return vec!(Some(0), Some(0)),
+                    StepMatchEarlyReturn => return ~[Some(0), Some(0)],
                     StepMatch => { matched = true; clist.empty() },
                     StepContinue => {},
                 }
@@ -175,9 +175,9 @@ impl<'r, 't> Nfa<'r, 't> {
             nlist.empty();
         }
         match self.which {
-            Exists if matched     => vec!(Some(0), Some(0)),
-            Exists                => vec!(None, None),
-            Location | Submatches => groups,
+            Exists if matched     => ~[Some(0), Some(0)],
+            Exists                => ~[None, None],
+            Location | Submatches => groups.as_slice().into_owned(),
         }
     }
 
@@ -402,13 +402,7 @@ impl<'t> CharReader<'t> {
 
 struct Thread {
     pc: uint,
-    groups: CaptureLocs,
-}
-
-impl Thread {
-    fn new(pc: uint, groups: CaptureLocs) -> Thread {
-        Thread { pc: pc, groups: groups }
-    }
+    groups: Vec<Option<uint>>,
 }
 
 struct Threads {
@@ -430,7 +424,7 @@ impl Threads {
         Threads {
             which: which,
             queue: Vec::from_fn(num_insts, |_| {
-                Thread::new(0, Vec::from_elem(num_caps * 2, None))
+                Thread { pc: 0, groups: Vec::from_elem(num_caps * 2, None) }
             }),
             sparse: Vec::from_elem(num_insts, 0u),
             size: 0,
