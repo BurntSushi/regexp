@@ -63,7 +63,7 @@ bench-perf: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp perf record -g -s ./build/bench --bench
 
 build/bench: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
-	rustc $(RUSTFLAGS) -L $(RUST_PATH) -Z lto --test --cfg bench src/lib.rs -o ./build/bench
+	rustc $(RUSTFLAGS) -L $(RUST_PATH) --test --cfg bench src/lib.rs -o ./build/bench
 
 scratch: build/scratch
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/scratch
