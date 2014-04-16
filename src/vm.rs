@@ -171,7 +171,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 }
                 i += 1;
             }
-            mem::swap(clist, nlist);
+            mem::swap(&mut clist, &mut nlist);
             nlist.empty();
         }
         match self.which {
