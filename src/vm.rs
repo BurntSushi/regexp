@@ -96,16 +96,16 @@ enum StepState {
 
 impl<'r, 't> Nfa<'r, 't> {
     fn run(&mut self) -> CaptureLocs {
-        let num_caps = match self.which {
+        let ncaps = match self.which {
             Exists => 0,
             Location => 1,
             Submatches => self.prog.num_captures(),
         };
         let mut matched = false;
-        let clist = &mut Threads::new(self.which, self.insts.len(), num_caps);
-        let nlist = &mut Threads::new(self.which, self.insts.len(), num_caps);
+        let mut clist = &mut Threads::new(self.which, self.insts.len(), ncaps);
+        let mut nlist = &mut Threads::new(self.which, self.insts.len(), ncaps);
 
-        let mut groups = Vec::from_elem(num_caps * 2, None);
+        let mut groups = Vec::from_elem(ncaps * 2, None);
 
         // Determine if the expression starts with a '^' so we can avoid
         // simulating .*?
@@ -136,7 +136,7 @@ impl<'r, 't> Nfa<'r, 't> {
                     let needle = self.prog.prefix.as_slice().as_bytes();
                     let haystack = self.input.as_bytes().slice_from(self.ic);
                     match find_prefix(needle, haystack) {
-                        // None => return Vec::from_elem(num_caps * 2, None), 
+                        // None => return Vec::from_elem(ncaps * 2, None), 
                         None => break,
                         Some(i) => {
                             self.ic += i;
@@ -420,11 +420,11 @@ impl Threads {
     // the execution of a VM.
     //
     // See http://research.swtch.com/sparse for the deets.
-    fn new(which: MatchKind, num_insts: uint, num_caps: uint) -> Threads {
+    fn new(which: MatchKind, num_insts: uint, ncaps: uint) -> Threads {
         Threads {
             which: which,
             queue: Vec::from_fn(num_insts, |_| {
-                Thread { pc: 0, groups: Vec::from_elem(num_caps * 2, None) }
+                Thread { pc: 0, groups: Vec::from_elem(ncaps * 2, None) }
             }),
             sparse: Vec::from_elem(num_insts, 0u),
             size: 0,
