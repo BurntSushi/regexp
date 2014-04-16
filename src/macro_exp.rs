@@ -90,12 +90,13 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
             &None => quote_expr!(cx, None),
         }
     );
+    let prefix_anchor = 
+        match re.p.insts.as_slice()[1] {
+            EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
+            _ => false,
+        };
     let init_groups = vec_from_fn(cx, sp, num_cap_locs,
                                   |cx| quote_expr!(&*cx, None));
-    // let init_queue = vec_from_fn(cx, sp, num_insts, 
-                                 // |cx| quote_expr!(&*cx, Thread::new())); 
-    // let init_sparse = vec_from_fn(cx, sp, num_insts, 
-                                  // |cx| quote_expr!(&*cx, 0u)); 
     let check_prefix = mk_check_prefix(cx, sp, &re);
     let step_insts = mk_step_insts(cx, sp, &re);
     let add_insts = mk_add_insts(cx, sp, &re);
@@ -147,8 +148,6 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
 
                         let mut groups = $init_groups;
 
-                        let prefix_anchor = false;
-
                         self.ic = start;
                         let mut next_ic = self.chars.set(start);
                         while self.ic <= end {
@@ -158,7 +157,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                                 }
                                 $check_prefix
                             }
-                            if clist.size == 0 || (!prefix_anchor && !matched) {
+                            if clist.size == 0 || (!$prefix_anchor && !matched) {
                                 self.add(clist, 0, &mut groups)
                             }
 
