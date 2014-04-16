@@ -64,7 +64,7 @@ bench-perf: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp perf record -g --call-graph dwarf -s ./build/bench --bench
 
 build/bench: src/test/bench.rs
-	rustc $(RUSTFLAGS) -L $(RUST_PATH) --test --cfg bench src/lib.rs -o ./build/bench
+	rustc $(RUSTFLAGS) -Z lto -L $(RUST_PATH) --test --cfg bench src/lib.rs -o ./build/bench
 
 scratch: build/scratch
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/scratch

@@ -19,15 +19,10 @@ Then run the Rust benchmark:
 ```
 [andrew@Liger regex-dna] make bench-rust
 ...
-real    0m11.449s
-user    0m53.620s
-sys     0m0.543s
+real    0m8.017s
+user    0m29.683s
+sys     0m1.323s
 ```
-
-(Note that I'm getting a lot of variation on my system for the Rust benchmark
-and I'm not sure why. I've seen wall clock times as low as 9 seconds and as
-high as 15 seconds. My machine was otherwise idle. The string replacement
-seems to be the bottleneck.)
 
 And the Go benchmark:
 

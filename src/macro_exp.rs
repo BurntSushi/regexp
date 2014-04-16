@@ -92,10 +92,10 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     );
     let init_groups = vec_from_fn(cx, sp, num_cap_locs,
                                   |cx| quote_expr!(&*cx, None));
-    let init_queue = vec_from_fn(cx, sp, num_insts,
-                                 |cx| quote_expr!(&*cx, Thread::new()));
-    let init_sparse = vec_from_fn(cx, sp, num_insts,
-                                  |cx| quote_expr!(&*cx, 0u));
+    // let init_queue = vec_from_fn(cx, sp, num_insts, 
+                                 // |cx| quote_expr!(&*cx, Thread::new())); 
+    // let init_sparse = vec_from_fn(cx, sp, num_insts, 
+                                  // |cx| quote_expr!(&*cx, 0u)); 
     let check_prefix = mk_check_prefix(cx, sp, &re);
     let step_insts = mk_step_insts(cx, sp, &re);
     let add_insts = mk_add_insts(cx, sp, &re);
@@ -142,8 +142,8 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                 impl<'t> Nfa<'t> {
                     fn run(&mut self, start: uint, end: uint) -> ~[Option<uint>] {
                         let mut matched = false;
-                        let clist = &mut Threads::new(self.which);
-                        let nlist = &mut Threads::new(self.which);
+                        let mut clist = &mut Threads::new(self.which);
+                        let mut nlist = &mut Threads::new(self.which);
 
                         let mut groups = $init_groups;
 
@@ -177,7 +177,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                                 }
                                 i += 1;
                             }
-                            ::std::mem::swap(clist, nlist);
+                            ::std::mem::swap(&mut clist, &mut nlist);
                             nlist.empty();
                         }
                         match self.which {
@@ -280,12 +280,6 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                     groups: Captures,
                 }
 
-                impl Thread {
-                    fn new() -> Thread {
-                        Thread { pc: 0, groups: $init_groups }
-                    }
-                }
-
                 struct Threads {
                     which: MatchKind,
                     queue: [Thread, ..$num_insts],
@@ -297,8 +291,8 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                     fn new(which: MatchKind) -> Threads {
                         Threads {
                             which: which,
-                            queue: $init_queue,
-                            sparse: $init_sparse,
+                            queue: unsafe { ::std::mem::uninit() },
+                            sparse: unsafe { ::std::mem::uninit() },
                             size: 0,
                         }
                     }
@@ -381,7 +375,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         }
         RegexpNative { cap_names: ~$cap_names }
     });
-    println!("{}", pprust::expr_to_str(expr));
+    // println!("{}", pprust::expr_to_str(expr)); 
     MRExpr(expr)
 }
 

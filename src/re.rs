@@ -135,6 +135,17 @@ impl Regexp for Dynamic {
     }
 }
 
+impl Regexp for ~Regexp {
+    fn exec(&self, which: MatchKind, input: &str,
+            start: uint, end: uint) -> ~[Option<uint>] {
+        (*self).exec(which, input, start, end)
+    }
+
+    fn capture_names<'r>(&'r self) -> &'r [Option<MaybeOwned<'static>>] {
+        (*self).capture_names()
+    }
+}
+
 pub trait Regexp {
     fn exec(&self, which: MatchKind, input: &str,
             start: uint, end: uint) -> ~[Option<uint>];
