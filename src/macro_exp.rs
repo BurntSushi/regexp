@@ -243,7 +243,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                         self.next = 0;
 
                         if self.input.len() == 0 {
-                            return 0 + 1
+                            return 1
                         }
                         if ic > 0 {
                             let i = ::std::cmp::min(ic, self.input.len());
@@ -296,19 +296,27 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                         }
                     }
 
-                    fn add(&mut self, pc: uint, groups: &Captures, empty: bool) {
+                    #[inline(always)]
+                    fn add(&mut self, pc: uint, groups: &Captures) {
                         let t = &mut self.queue[self.size];
                         t.pc = pc;
-                        match (empty, self.which) {
-                            (_, Exists) | (true, _) => {},
-                            (false, Location) => {
+                        match self.which {
+                            Exists => {},
+                            Location => {
                                 t.groups[0] = groups[0];
                                 t.groups[1] = groups[1];
                             }
-                            (false, Submatches) => {
+                            Submatches => {
                                 unsafe { t.groups.copy_memory(groups.as_slice()) }
                             }
                         }
+                        self.sparse[pc] = self.size;
+                        self.size += 1;
+                    }
+
+                    #[inline(always)]
+                    fn add_empty(&mut self, pc: uint) {
+                        self.queue[self.size].pc = pc;
                         self.sparse[pc] = self.size;
                         self.size += 1;
                     }
@@ -319,34 +327,19 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                         s < self.size && self.queue[s].pc == pc
                     }
 
+                    #[inline(always)]
                     fn empty(&mut self) {
                         self.size = 0;
                     }
 
+                    #[inline(always)]
                     fn pc(&self, i: uint) -> uint {
                         self.queue[i].pc
                     }
 
+                    #[inline(always)]
                     fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
                         &'r mut self.queue[i].groups
-                    }
-                }
-
-                #[allow(dead_code)]
-                #[inline(always)]
-                fn class_cmp(casei: bool, mut textc: char,
-                             (mut start, mut end): (char, char)) -> Ordering {
-                    if casei {
-                        textc = textc.to_uppercase();
-                        start = start.to_uppercase();
-                        end = end.to_uppercase();
-                    }
-                    if textc >= start && textc <= end {
-                        Equal
-                    } else if start > textc {
-                        Greater
-                    } else {
-                        Less
                     }
                 }
 
@@ -559,7 +552,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
                         quote_expr!(&*cx, self.is_begin())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add($pc, groups, true);
+                    nlist.add_empty($pc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -574,7 +567,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
                         quote_expr!(&*cx, self.is_end())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add($pc, groups, true);
+                    nlist.add_empty($pc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -586,7 +579,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
                         quote_expr!(&*cx, self.is_word_boundary())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add($pc, groups, true);
+                    nlist.add_empty($pc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -596,7 +589,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
                 // right over it every time.
                 if slot > 1 {
                     quote_expr!(&*cx, {
-                        nlist.add($pc, groups, true);
+                        nlist.add_empty($pc);
                         match self.which {
                             Submatches => {
                                 let old = groups[$slot];
@@ -609,7 +602,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
                     })
                 } else {
                     quote_expr!(&*cx, {
-                        nlist.add($pc, groups, true);
+                        nlist.add_empty($pc);
                         match self.which {
                             Submatches | Location => {
                                 let old = groups[$slot];
@@ -624,19 +617,19 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
             }
             Jump(to) => {
                 quote_expr!(&*cx, {
-                    nlist.add($pc, groups, true);
+                    nlist.add_empty($pc);
                     self.add(nlist, $to, groups);
                 })
             }
             Split(x, y) => {
                 quote_expr!(&*cx, {
-                    nlist.add($pc, groups, true);
+                    nlist.add_empty($pc);
                     self.add(nlist, $x, groups);
                     self.add(nlist, $y, groups);
                 })
             }
             // For Match, OneChar, CharClass, Any
-            _ => quote_expr!(&*cx, nlist.add($pc, groups, false)),
+            _ => quote_expr!(&*cx, nlist.add($pc, groups)),
         };
         mk_inst_arm(cx, sp, pc, body)
     }).collect::<Vec<ast::Arm>>();
