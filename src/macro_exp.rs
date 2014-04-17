@@ -417,7 +417,7 @@ fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @Expr) -> ast::Arm {
     }
 }
 
-fn mk_any_arm(cx: &mut ExtCtxt, sp: Span) -> ast::Arm {
+fn mk_any_arm(cx: &mut ExtCtxt, sp: Span, e: @Expr) -> ast::Arm {
     ast::Arm {
         pats: vec!(@ast::Pat{
             id: DUMMY_NODE_ID,
@@ -425,8 +425,34 @@ fn mk_any_arm(cx: &mut ExtCtxt, sp: Span) -> ast::Arm {
             node: ast::PatWild,
         }),
         guard: None,
-        body: quote_expr!(&*cx, {}),
+        body: e,
     }
+}
+
+fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
+                  casei: bool, ranges: &[(char, char)]) -> @Expr {
+    let mut arms = ranges.iter().map(|&(mut start, mut end)| {
+        if casei {
+            start = start.to_uppercase();
+            end = end.to_uppercase();
+        }
+        ast::Arm {
+            pats: vec!(@ast::Pat{
+                id: DUMMY_NODE_ID,
+                span: sp,
+                node: ast::PatRange(quote_expr!(&*cx, $start),
+                                    quote_expr!(&*cx, $end)),
+            }),
+            guard: None,
+            body: quote_expr!(&*cx, true),
+        }
+    }).collect::<Vec<ast::Arm>>();
+
+    let nada = quote_expr!(&*cx, false);
+    arms.push(mk_any_arm(cx, sp, nada));
+
+    let match_on = quote_expr!(&*cx, c);
+    as_expr(sp, ast::ExprMatch(match_on, arms))
 }
 
 fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
@@ -470,20 +496,24 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
             CharClass(ref ranges, flags) => {
                 let negate = flags & FLAG_NEGATED > 0;
                 let casei = flags & FLAG_NOCASE > 0;
+                let get_char =
+                    if casei {
+                        quote_expr!(&*cx, self.chars.prev.unwrap().to_uppercase())
+                    } else {
+                        quote_expr!(&*cx, self.chars.prev.unwrap())
+                    };
                 let negcond =
                     if negate {
                         quote_expr!(&*cx, !found)
                     } else {
                         quote_expr!(&*cx, found)
                     };
-                let ranges = as_expr_vec(cx, sp, ranges.as_slice(),
-                                         |cx, _, &(s, e)| quote_expr!(&*cx, ($s, $e)));
+                let match_ranges = mk_match_class(cx, sp,
+                                                  casei, ranges.as_slice());
                 quote_expr!(&*cx, {
                     if self.chars.prev.is_some() {
-                        let c = self.chars.prev.unwrap();
-                        let found = $ranges;
-                        let found = found.bsearch(|&rc| class_cmp($casei, c, rc));
-                        let found = found.is_some();
+                        let c = $get_char;
+                        let found = $match_ranges;
                         if $negcond {
                             self.add(nlist, $nextpc, caps);
                         }
@@ -508,7 +538,8 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
         mk_inst_arm(cx, sp, pc, body)
     }).collect::<Vec<ast::Arm>>();
 
-    arms.push(mk_any_arm(cx, sp));
+    let nada = quote_expr!(&*cx, {});
+    arms.push(mk_any_arm(cx, sp, nada));
     let m = mk_match_insts(cx, sp, arms);
     m
 }
@@ -610,7 +641,8 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Dynamic) -> @Expr {
         mk_inst_arm(cx, sp, pc, body)
     }).collect::<Vec<ast::Arm>>();
 
-    arms.push(mk_any_arm(cx, sp));
+    let nada = quote_expr!(&*cx, {});
+    arms.push(mk_any_arm(cx, sp, nada));
     let m = mk_match_insts(cx, sp, arms);
     m
 }
