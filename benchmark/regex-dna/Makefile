@@ -2,7 +2,7 @@ bench-rust: run-rust big.fasta
 	time ./run-rust < big.fasta
 
 bench-rust-perf: run-rust big.fasta
-	time perf record -g -s ./run-rust < big.fasta
+	time perf record --call-graph dwarf ./run-rust < big.fasta
 
 bench-golang: run-golang big.fasta
 	time ./run-golang < big.fasta
@@ -18,7 +18,7 @@ generator: shootout-fasta.rs
 
 run-rust: regex-dna.rs
 	(cd ../.. && make)
-	rustc --opt-level=3 -Z lto -L ../../build regex-dna.rs -o run-rust
+	rustc --opt-level=3 -Z lto -g -L ../../build regex-dna.rs -o run-rust
 
 run-golang: regex-dna.go
 	go build -o run-golang regex-dna.go
