@@ -7,7 +7,7 @@ bench-rust-perf: run-rust big.fasta
 bench-golang: run-golang big.fasta
 	time ./run-golang < big.fasta
 
-bench-python: regex-dna.py
+bench-python: regex-dna.py big.fasta
 	time python3 ./regex-dna.py < big.fasta
 
 big.fasta: generator
