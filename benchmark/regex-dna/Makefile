@@ -36,4 +36,5 @@ check.output:
 
 clean:
 	rm -rf big.fasta check.fasta check.output run-golang run-rust generator
+	rm -f perf.data*
 
