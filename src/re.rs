@@ -10,6 +10,7 @@
 
 use collections::HashMap;
 use std::from_str::from_str;
+use std::str::raw;
 
 use super::compile::Program;
 use super::parse::{parse, Error};
@@ -341,11 +342,11 @@ impl Regexp {
             i += 1;
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
-            new.push_str(text.slice(last_match, s));
+            new.push_str(unsafe { raw::slice_unchecked(text, last_match, s) });
             new.push_str(rep.reg_replace(&cap));
             last_match = e;
         }
-        new.push_str(text.slice(last_match, text.len()));
+        new.push_str(unsafe { raw::slice_unchecked(text, last_match, text.len()) });
         new.into_owned()
     }
 }
@@ -367,7 +368,7 @@ pub trait Replacer {
 impl<'t> Replacer for NoExpand<'t> {
     fn reg_replace(&self, _: &Captures) -> ~str {
         let NoExpand(s) = *self;
-        s.to_owned()
+        s.into_owned()
     }
 }
 
@@ -456,7 +457,7 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
 pub struct Captures<'t> {
     text: &'t str,
     locs: CaptureLocs,
-    named: HashMap<~str, uint>,
+    named: Option<HashMap<~str, uint>>,
     offset: uint,
 }
 
@@ -467,15 +468,21 @@ impl<'t> Captures<'t> {
             return None
         }
 
-        let mut named = HashMap::new();
-        for (i, name) in re.p.names.as_slice().iter().enumerate() {
-            match name {
-                &None => {},
-                &Some(ref name) => {
-                    named.insert(name.as_slice().to_owned(), i);
+        let named =
+            if re.p.names.len() == 0 {
+                None
+            } else {
+                let mut named = HashMap::new();
+                for (i, name) in re.p.names.as_slice().iter().enumerate() {
+                    match name {
+                        &None => {},
+                        &Some(ref name) => {
+                            named.insert(name.as_slice().to_owned(), i);
+                        }
+                    }
                 }
-            }
-        }
+                Some(named)
+            };
         Some(Captures {
             text: text,
             locs: locs,
@@ -514,9 +521,14 @@ impl<'t> Captures<'t> {
     /// If `name` isn't a valid capture group or didn't match anything, then 
     /// the empty string is returned.
     pub fn name(&self, name: &str) -> &'t str {
-        match self.named.find(&name.to_owned()) {
+        match self.named {
             None => "",
-            Some(i) => self.at(*i),
+            Some(ref h) => {
+                match h.find(&name.to_owned()) {
+                    None => "",
+                    Some(i) => self.at(*i),
+                }
+            }
         }
     }
 
