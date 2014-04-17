@@ -56,17 +56,6 @@ fn main() {
     let seq_arc = Arc::new(seq.clone());
     let clen = seq.len();
  
-    let mut counts = vec!();
-    counts.push(future_variant!(seq_arc, "agggtaaa|tttaccct"));
-    counts.push(future_variant!(seq_arc, "[cgt]gggtaaa|tttaccc[acg]"));
-    counts.push(future_variant!(seq_arc, "a[act]ggtaaa|tttacc[agt]t"));
-    counts.push(future_variant!(seq_arc, "ag[act]gtaaa|tttac[agt]ct"));
-    counts.push(future_variant!(seq_arc, "agg[act]taaa|ttta[agt]cct"));
-    counts.push(future_variant!(seq_arc, "aggg[acg]aaa|ttt[cgt]ccct"));
-    counts.push(future_variant!(seq_arc, "agggt[cgt]aa|tt[acg]accct"));
-    counts.push(future_variant!(seq_arc, "agggta[cgt]a|t[acg]taccct"));
-    counts.push(future_variant!(seq_arc, "agggtaa[cgt]|[acg]ttaccct"));
- 
     let mut seqlen = sync::Future::spawn(proc() {
         let substs = ~[
             Subst(~nregexp!("B") as ~Regexp, "(c|g|t)"),
@@ -87,6 +76,18 @@ fn main() {
         }
         seq.len()
     });
+ 
+    let mut counts = vec!();
+    counts.push(future_variant!(seq_arc, "agggtaaa|tttaccct"));
+    counts.push(future_variant!(seq_arc, "[cgt]gggtaaa|tttaccc[acg]"));
+    counts.push(future_variant!(seq_arc, "a[act]ggtaaa|tttacc[agt]t"));
+    counts.push(future_variant!(seq_arc, "ag[act]gtaaa|tttac[agt]ct"));
+    counts.push(future_variant!(seq_arc, "agg[act]taaa|ttta[agt]cct"));
+    counts.push(future_variant!(seq_arc, "aggg[acg]aaa|ttt[cgt]ccct"));
+    counts.push(future_variant!(seq_arc, "agggt[cgt]aa|tt[acg]accct"));
+    counts.push(future_variant!(seq_arc, "agggta[cgt]a|t[acg]taccct"));
+    counts.push(future_variant!(seq_arc, "agggtaa[cgt]|[acg]ttaccct"));
+
     for (i, variant) in VARIANTS.iter().enumerate() {
         println!("{} {}", variant, counts.get_mut(i).get());
     }
