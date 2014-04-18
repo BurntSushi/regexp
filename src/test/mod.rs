@@ -11,6 +11,16 @@
 #[phase(syntax)]
 extern crate regexp_macros;
 
+#[cfg(dynamic)]
+macro_rules! regexp(
+    ($re:expr) => (
+        match ::regexp::Regexp::new($re) {
+            Ok(re) => re,
+            Err(err) => fail!("{}", err),
+        }
+    );
+)
+
 #[cfg(bench)]
 mod bench;
 #[cfg(not(bench), not(stage1))]

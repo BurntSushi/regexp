@@ -138,18 +138,17 @@ macro_rules! throughput(
     ($name:ident, $regex:expr, $size:expr) => (
         #[bench]
         fn $name(b: &mut Bencher) {
-            let re = regexp!($regex);
             let text = gen_text($size);
             b.bytes = $size;
-            b.iter(|| if re.is_match(text) { fail!("match") });
+            b.iter(|| if $regex.is_match(text) { fail!("match") });
         }
     );
 )
 
-// static EASY0: &'static str  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ$"; 
-// static EASY1: &'static str  = "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$"; 
-// static MEDIUM: &'static str = "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$"; 
-// static HARD: &'static str   = "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$"; 
+fn easy0() -> Regexp { regexp!("ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+fn easy1() -> Regexp { regexp!("A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$") }
+fn medium() -> Regexp { regexp!("[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+fn hard() -> Regexp { regexp!("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
 
 fn gen_text(n: uint) -> ~str {
     let mut rng = task_rng();
@@ -162,32 +161,19 @@ fn gen_text(n: uint) -> ~str {
     str::from_utf8(bytes).unwrap().to_owned()
 }
 
-// The 1MB/32MB benchmarks take too damn long and they typically aren't
-// substantially different from the 32K benchmarks.
-// I actually think this is the fault of the microbenchmark facilities built
-// into rustc. Go's microbenchmarking seems to handle things fine.
+throughput!(easy0_32, easy0(), 32)
+throughput!(easy0_1K, easy0(), 1<<10)
+throughput!(easy0_32K, easy0(), 32<<10)
 
-throughput!(easy0_32, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32)
-throughput!(easy0_1K, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<10)
-throughput!(easy0_32K, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32<<10)
-// throughput!(easy0_1M, "ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<20) 
-// throughput!(easy0_32M, EASY0, 32<<20) 
+throughput!(easy1_32, easy1(), 32)
+throughput!(easy1_1K, easy1(), 1<<10)
+throughput!(easy1_32K, easy1(), 32<<10)
 
-throughput!(easy1_32, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 32)
-throughput!(easy1_1K, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 1<<10)
-throughput!(easy1_32K, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 32<<10)
-// throughput!(easy1_1M, "A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$", 1<<20) 
-// throughput!(easy1_32M, EASY1, 32<<20) 
+throughput!(medium_32, medium(), 32)
+throughput!(medium_1K, medium(), 1<<10)
+throughput!(medium_32K,medium(), 32<<10)
 
-throughput!(medium_32, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32)
-throughput!(medium_1K, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<10)
-throughput!(medium_32K, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32<<10)
-// throughput!(medium_1M, "[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<20) 
-// throughput!(medium_32M, MEDIUM, 32<<20) 
-
-throughput!(hard_32, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32)
-throughput!(hard_1K, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<10)
-throughput!(hard_32K, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 32<<10)
-// throughput!(hard_1M, "[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$", 1<<20) 
-// throughput!(hard_32M, HARD, 32<<20) 
+throughput!(hard_32, hard(), 32)
+throughput!(hard_1K, hard(), 1<<10)
+throughput!(hard_32K,hard(), 32<<10)
 
