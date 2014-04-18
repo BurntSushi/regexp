@@ -16,8 +16,9 @@ use std::num;
 use std::str;
 
 /// Static data containing Unicode ranges for general categories and scripts.
-use self::unicode::UNICODE_CLASSES;
-mod unicode;
+use self::unicode::{UNICODE_CLASSES, PERLD, PERLS, PERLW};
+#[allow(visible_private_types)]
+pub mod unicode;
 
 /// The maximum number of repetitions allowed with the `{n,m}` syntax.
 static MAX_REPEAT: uint = 1000;
@@ -589,15 +590,10 @@ impl<'a> Parser<'a> {
             'x' => Ok(try!(self.parse_hex())),
             'p' | 'P' => Ok(try!(self.parse_unicode_name())),
             'd' | 'D' | 's' | 'S' | 'w' | 'W' => {
-                let name = str::from_char(c.to_lowercase());
-                match find_class(PERL_CLASSES, name) {
-                    None => fail!("Could not find Perl class '{}'", c),
-                    Some(ranges) => {
-                        let mut flags = self.flags & FLAG_NOCASE;
-                        if c.is_uppercase() { flags |= FLAG_NEGATED }
-                        Ok(~Class(combine_ranges(ranges), flags))
-                    }
-                }
+                let ranges = perl_unicode_class(c);
+                let mut flags = self.flags & FLAG_NOCASE;
+                if c.is_uppercase() { flags |= FLAG_NEGATED }
+                Ok(~Class(ranges, flags))
             }
             _ => self.err(format!("Invalid escape sequence '\\\\{}'", c)),
         }
@@ -945,6 +941,17 @@ fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     ordered
 }
 
+// Constructs a Unicode friendly Perl character class from \d, \s or \w
+// (or any of their negated forms). Note that this does not handle negation.
+fn perl_unicode_class(which: char) -> Vec<(char, char)> {
+    match which.to_lowercase() {
+        'd' => Vec::from_slice(PERLD),
+        's' => Vec::from_slice(PERLS),
+        'w' => Vec::from_slice(PERLW),
+        _ => unreachable!(),
+    }
+}
+
 // Returns a concatenation of two expressions. This also guarantees that a
 // `Cat` expression will never be a direct child of another `Cat` expression.
 fn concat_flatten(x: ~Ast, y: ~Ast) -> Ast {
@@ -969,16 +976,17 @@ fn is_valid_cap(c: char) -> bool {
     || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-fn find_class(classes: Class, name: &str) -> Option<Vec<(char, char)>> {
+fn find_class(classes: NamedClasses, name: &str) -> Option<Vec<(char, char)>> {
     match classes.bsearch(|&(s, _)| s.cmp(&name)) {
         Some(i) => Some(Vec::from_slice(classes[i].val1())),
         None => None,
     }
 }
 
-type Class = &'static [(&'static str, &'static [(char, char)])];
+type Class = &'static [(char, char)];
+type NamedClasses = &'static [(&'static str, Class)];
 
-static ASCII_CLASSES: Class = &[
+static ASCII_CLASSES: NamedClasses = &[
     // Classes must be in alphabetical order so that bsearch works.
     // [:alnum:]      alphanumeric (== [0-9A-Za-z]) 
     // [:alpha:]      alphabetic (== [A-Za-z]) 
@@ -1012,7 +1020,8 @@ static ASCII_CLASSES: Class = &[
     ("xdigit", &[('0', '9'), ('A', 'F'), ('a', 'f')]),
 ];
 
-static PERL_CLASSES: Class = &[
+#[allow(dead_code)]
+static PERL_CLASSES: NamedClasses = &[
     // Classes must be in alphabetical order so that bsearch works.
     // \d             digits (== [0-9]) 
     // \D             not digits (== [^0-9]) 
