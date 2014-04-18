@@ -30,17 +30,6 @@ pub fn quote(text: &str) -> ~str {
     quoted.into_owned()
 }
 
-/// Compiles a regular expression. Calls `fail!` for invalid expressions.
-///
-/// Note that when possible, you should prefer the `regexp!` macro instead of
-/// this function.
-pub fn regexp(regex: &str) -> Regexp {
-    match Regexp::new(regex) {
-        Ok(r) => r,
-        Err(err) => fail!("{}", err),
-    }
-}
-
 /// Tests if the given regular expression matches somewhere in the text given.
 ///
 /// If there was a problem compiling the regular expression, an error is

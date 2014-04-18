@@ -378,7 +378,7 @@ pub use parse::Error;
 pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use re::{FindCaptures, FindMatches};
 pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
-pub use re::{quote, is_match, regexp};
+pub use re::{quote, is_match};
 pub use vm::{MatchKind, Exists, Location, Submatches};
 
 mod compile;
