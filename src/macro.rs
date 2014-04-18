@@ -100,9 +100,9 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     let step_insts = mk_step_insts(cx, sp, prog);
     let add_insts = mk_add_insts(cx, sp, prog);
     let expr = quote_expr!(&*cx, {
-        fn exec<'t>(which: ::regexp::MatchKind, input: &'t str,
+        fn exec<'t>(which: ::regexp::program::MatchKind, input: &'t str,
                     start: uint, end: uint) -> ~[Option<uint>] {
-            use regexp::{MatchKind, Exists, Location, Submatches};
+            use regexp::program::{MatchKind, Exists, Location, Submatches};
 
             return Nfa {
                 which: which,

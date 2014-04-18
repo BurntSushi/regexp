@@ -374,7 +374,6 @@ pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use re::{FindCaptures, FindMatches};
 pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
 pub use re::{quote, is_match};
-pub use vm::{MatchKind, Exists, Location, Submatches};
 
 mod compile;
 mod parse;
@@ -415,4 +414,5 @@ pub mod program {
         FLAG_SWAP_GREED, FLAG_NEGATED,
     };
     pub use super::re::{Dynamic, Native};
+    pub use vm::{MatchKind, Exists, Location, Submatches};
 }
