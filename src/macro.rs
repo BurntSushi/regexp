@@ -42,7 +42,7 @@ use syntax::print::pprust;
 
 use regexp::Dynamic;
 use regexp::program::{
-    MaybeStatic, Flags,
+    Flags,
     Inst, OneChar, CharClass, Any, Save, Jump, Split,
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
 };
@@ -85,7 +85,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         |cx, _, name| match name {
             &Some(ref name) => {
                 let name = name.as_slice();
-                quote_expr!(cx, Some(::std::str::Owned(~$name)))
+                quote_expr!(cx, Some(~$name))
             }
             &None => quote_expr!(cx, None),
         }
@@ -102,10 +102,10 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     let add_insts = mk_add_insts(cx, sp, &re);
     let expr = quote_expr!(&*cx, {
         struct RegexpNative {
-            cap_names: ~[Option<::std::str::MaybeOwned<'static>>],
+            cap_names: ~[Option<~str>],
         }
         impl ::regexp::Regexp for RegexpNative {
-            fn capture_names<'r>(&'r self) -> &'r [Option<::std::str::MaybeOwned<'static>>] {
+            fn capture_names<'r>(&'r self) -> &'r [Option<~str>] {
                 self.cap_names.as_slice()
             }
 

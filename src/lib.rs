@@ -412,9 +412,8 @@ pub mod program {
     // documentation, which is an acceptable compromise IMO.
     pub use super::parse::Flags;
     pub use super::compile::{
-        Program, MaybeStatic,
+        Program,
         Inst, OneChar, CharClass, Any, Save, Jump, Split,
         Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
-        Dynamic, Static,
     };
 }

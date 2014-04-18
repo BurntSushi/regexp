@@ -11,7 +11,6 @@
 use collections::HashMap;
 use std::from_str::from_str;
 use std::str::raw;
-use std::str::MaybeOwned;
 
 use super::compile::Program;
 use super::parse::{parse, Error};
@@ -131,7 +130,7 @@ impl Regexp for Dynamic {
         vm::run(which, &self.p, input, start, end)
     }
 
-    fn capture_names<'r>(&'r self) -> &'r [Option<MaybeOwned<'static>>] {
+    fn capture_names<'r>(&'r self) -> &'r [Option<~str>] {
         self.p.names.as_slice()
     }
 }
@@ -142,7 +141,7 @@ impl Regexp for ~Regexp {
         (*self).exec(which, input, start, end)
     }
 
-    fn capture_names<'r>(&'r self) -> &'r [Option<MaybeOwned<'static>>] {
+    fn capture_names<'r>(&'r self) -> &'r [Option<~str>] {
         (*self).capture_names()
     }
 }
@@ -150,7 +149,7 @@ impl Regexp for ~Regexp {
 pub trait Regexp {
     fn exec(&self, which: MatchKind, input: &str,
             start: uint, end: uint) -> ~[Option<uint>];
-    fn capture_names<'r>(&'r self) -> &'r [Option<MaybeOwned<'static>>];
+    fn capture_names<'r>(&'r self) -> &'r [Option<~str>];
 
     /// Returns true if and only if the regexp matches the string given.
     fn is_match(&self, text: &str) -> bool {
@@ -506,7 +505,7 @@ impl<'t> Captures<'t> {
                     match name {
                         &None => {},
                         &Some(ref name) => {
-                            named.insert(name.as_slice().to_owned(), i);
+                            named.insert(name.to_owned(), i);
                         }
                     }
                 }

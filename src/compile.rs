@@ -14,8 +14,6 @@
 
 use std::cmp;
 use std::iter;
-use std::slice::Vector;
-use std::str::{MaybeOwned, Owned};
 use super::parse;
 use super::parse::{
     Flags, FLAG_EMPTY,
@@ -25,25 +23,6 @@ use super::parse::{
 };
 
 type InstIdx = uint;
-
-#[deriving(Show, Clone)]
-pub enum MaybeStatic<T> {
-    Dynamic(Vec<T>),
-    Static(&'static [T]),
-}
-
-impl<T> Vector<T> for MaybeStatic<T> {
-    fn as_slice<'a>(&'a self) -> &'a [T] {
-        match *self {
-            Dynamic(ref xs) => xs.as_slice(),
-            Static(xs) => xs,
-        }
-    }
-}
-
-impl<T> Container for MaybeStatic<T> {
-    fn len(&self) -> uint { self.as_slice().len() }
-}
 
 #[deriving(Show, Clone)]
 pub enum Inst {
@@ -58,7 +37,7 @@ pub enum Inst {
     // the range of characters given.
     // The flags indicate whether to do a case insentivie match and whether
     // the character class is negated or not.
-    CharClass(MaybeStatic<(char, char)>, Flags),
+    CharClass(Vec<(char, char)>, Flags),
 
     // Matches any character except new lines.
     // The flags indicate whether to include the '\n' character.
@@ -101,17 +80,17 @@ pub enum Inst {
 pub struct Program {
     // A copy of the original regular expression.
     // It's not currently used.
-    pub regex: MaybeOwned<'static>,
+    pub regex: ~str,
     // A sequence of instructions.
-    pub insts: MaybeStatic<Inst>,
+    pub insts: Vec<Inst>,
     // A sequence of names in correspondence with the number of capture groups
     // in an expression. If a capture group doesn't have a name, then the
     // corresponding position in `names` is None.
-    pub names: MaybeStatic<Option<MaybeOwned<'static>>>,
+    pub names: Vec<Option<~str>>,
     // If the regular expression requires a literal prefix in order to have a
     // match, that prefix is stored here. (It's used in the VM to implement
     // an optimization.)
-    pub prefix: MaybeOwned<'static>,
+    pub prefix: ~str,
 }
 
 impl Program {
@@ -139,10 +118,10 @@ impl Program {
 
         let names = c.names.clone();
         Program {
-            regex: Owned(regex.to_owned()),
-            insts: Dynamic(c.insts),
-            names: Dynamic(names),
-            prefix: Owned(pre.into_owned()),
+            regex: regex.into_owned(),
+            insts: c.insts,
+            names: names,
+            prefix: pre.into_owned(),
         }
     }
 
@@ -150,7 +129,7 @@ impl Program {
     /// This includes the zeroth capture.
     pub fn num_captures(&self) -> uint {
         let mut n = 0;
-        for inst in self.insts.as_slice().iter() {
+        for inst in self.insts.iter() {
             match *inst {
                 Save(c) => n = cmp::max(n, c+1),
                 _ => {}
@@ -163,7 +142,7 @@ impl Program {
 
 struct Compiler<'r> {
     insts: Vec<Inst>,
-    names: Vec<Option<MaybeOwned<'r>>>,
+    names: Vec<Option<~str>>,
 }
 
 // The compiler implemented here is extremely simple. Most of the complexity
@@ -177,7 +156,7 @@ impl<'r> Compiler<'r> {
             ~Literal(c, flags) => self.push(OneChar(c, flags)),
             ~Dot(nl) => self.push(Any(nl)),
             ~Class(ranges, flags) =>
-                self.push(CharClass(Dynamic(ranges), flags)),
+                self.push(CharClass(ranges, flags)),
             ~Begin(flags) => self.push(EmptyBegin(flags)),
             ~End(flags) => self.push(EmptyEnd(flags)),
             ~WordBoundary(flags) => self.push(EmptyWordBoundary(flags)),
@@ -186,7 +165,7 @@ impl<'r> Compiler<'r> {
                 if cap >= len {
                     self.names.grow(10 + cap - len, &None)
                 }
-                *self.names.get_mut(cap) = name.map(Owned);
+                *self.names.get_mut(cap) = name;
 
                 self.push(Save(2 * cap));
                 self.compile(x);
