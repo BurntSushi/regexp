@@ -12,7 +12,7 @@ use regexp::{Regexp, Dynamic, NoExpand};
 
 #[test]
 fn splitn() {
-    let re = nregexp!(r"\d+");
+    let re = regexp!(r"\d+");
     let text = "cauchy123plato456tyler789binx";
     let subs: Vec<&str> = re.splitn(text, 2).collect();
     assert_eq!(subs, vec!("cauchy", "plato456tyler789binx"));
@@ -20,7 +20,7 @@ fn splitn() {
 
 #[test]
 fn split() {
-    let re = nregexp!(r"\d+");
+    let re = regexp!(r"\d+");
     let text = "cauchy123plato456tyler789binx";
     let subs: Vec<&str> = re.split(text).collect();
     assert_eq!(subs, vec!("cauchy", "plato", "tyler", "binx"));
@@ -31,7 +31,7 @@ macro_rules! replace(
      $search:expr, $replace:expr, $result:expr) => (
         #[test]
         fn $name() {
-            let re = nregexp!($re);
+            let re = regexp!($re);
             assert_eq!(re.$which($search, $replace), $result);
         }
     );
@@ -103,7 +103,7 @@ macro_rules! mat(
         fn $name() {
             let text = $text;
             let expected: Vec<Option<(uint, uint)>> = vec!($($loc)+);
-            let r = nregexp!($re);
+            let r = regexp!($re);
             let got = match r.captures(text) {
                 Some(c) => c.iter_pos().collect::<Vec<Option<(uint, uint)>>>(),
                 None => vec!(None),

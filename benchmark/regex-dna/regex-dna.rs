@@ -4,7 +4,7 @@
 #![feature(macro_rules, phase)]
 
 extern crate regexp;
-#[phase(syntax)]extern crate regexp_macros_exp;
+#[phase(syntax)]extern crate regexp_macros;
 extern crate sync;
 
 use regexp::{NoExpand, Regexp};
@@ -40,7 +40,7 @@ macro_rules! future_variant(
     ($seq_arc:ident, $regex:expr) => ({
         let seq_arc_copy = $seq_arc.clone();
         sync::Future::spawn(proc() {
-            let re = nregexp!($regex);
+            let re = regexp!($regex);
             count_matches(*seq_arc_copy, re)
         })
     });
@@ -51,24 +51,24 @@ fn main() {
     let mut seq = stdin.read_to_str().unwrap();
     let ilen = seq.len();
 
-    let trim_headers = nregexp!(">[^\n]*\n|\n");
+    let trim_headers = regexp!(">[^\n]*\n|\n");
     seq = replace(trim_headers, seq, "");
     let seq_arc = Arc::new(seq.clone());
     let clen = seq.len();
  
     let mut seqlen = sync::Future::spawn(proc() {
         let substs = ~[
-            Subst(~nregexp!("B") as ~Regexp, "(c|g|t)"),
-            Subst(~nregexp!("D") as ~Regexp, "(a|g|t)"),
-            Subst(~nregexp!("H") as ~Regexp, "(a|c|t)"),
-            Subst(~nregexp!("K") as ~Regexp, "(g|t)"),
-            Subst(~nregexp!("M") as ~Regexp, "(a|c)"),
-            Subst(~nregexp!("N") as ~Regexp, "(a|c|g|t)"),
-            Subst(~nregexp!("R") as ~Regexp, "(a|g)"),
-            Subst(~nregexp!("S") as ~Regexp, "(c|g)"),
-            Subst(~nregexp!("V") as ~Regexp, "(a|c|g)"),
-            Subst(~nregexp!("W") as ~Regexp, "(a|t)"),
-            Subst(~nregexp!("Y") as ~Regexp, "(c|t)"),
+            Subst(~regexp!("B") as ~Regexp, "(c|g|t)"),
+            Subst(~regexp!("D") as ~Regexp, "(a|g|t)"),
+            Subst(~regexp!("H") as ~Regexp, "(a|c|t)"),
+            Subst(~regexp!("K") as ~Regexp, "(g|t)"),
+            Subst(~regexp!("M") as ~Regexp, "(a|c)"),
+            Subst(~regexp!("N") as ~Regexp, "(a|c|g|t)"),
+            Subst(~regexp!("R") as ~Regexp, "(a|g)"),
+            Subst(~regexp!("S") as ~Regexp, "(c|g)"),
+            Subst(~regexp!("V") as ~Regexp, "(a|c|g)"),
+            Subst(~regexp!("W") as ~Regexp, "(a|t)"),
+            Subst(~regexp!("Y") as ~Regexp, "(c|t)"),
         ];
         let mut seq = seq;
         for Subst(re, replacement) in substs.move_iter() {

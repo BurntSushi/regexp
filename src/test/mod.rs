@@ -9,7 +9,7 @@
 // except according to those terms.
 
 #[phase(syntax)]
-extern crate regexp_macros_exp;
+extern crate regexp_macros;
 
 #[cfg(bench)]
 mod bench;
