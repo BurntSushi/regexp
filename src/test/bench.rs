@@ -11,16 +11,16 @@
 use rand::{Rng, task_rng};
 use stdtest::Bencher;
 use std::str;
-use regexp::{Regexp, Dynamic, NoExpand};
+use regexp::{Regexp, NoExpand};
 
-fn bench_assert_match<R: Regexp>(b: &mut Bencher, re: R, text: &str) {
+fn bench_assert_match(b: &mut Bencher, re: Regexp, text: &str) {
     b.iter(|| if !re.is_match(text) { fail!("no match") });
 }
 
 #[bench]
 fn no_exponential(b: &mut Bencher) {
     let n = 100;
-    let re = Dynamic::new("a?".repeat(n) + "a".repeat(n)).unwrap();
+    let re = Regexp::new("a?".repeat(n) + "a".repeat(n)).unwrap();
     let text = "a".repeat(n);
     bench_assert_match(b, re, text);
 }

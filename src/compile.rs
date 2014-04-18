@@ -78,15 +78,8 @@ pub enum Inst {
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
 /// (This makes it convenient and efficient for use with the `regexp!` macro.)
 pub struct Program {
-    // A copy of the original regular expression.
-    // It's not currently used.
-    pub regex: ~str,
     // A sequence of instructions.
     pub insts: Vec<Inst>,
-    // A sequence of names in correspondence with the number of capture groups
-    // in an expression. If a capture group doesn't have a name, then the
-    // corresponding position in `names` is None.
-    pub names: Vec<Option<~str>>,
     // If the regular expression requires a literal prefix in order to have a
     // match, that prefix is stored here. (It's used in the VM to implement
     // an optimization.)
@@ -94,7 +87,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn new(regex: &str, ast: ~parse::Ast) -> Program {
+    pub fn new(ast: ~parse::Ast) -> (Program, ~[Option<~str>]) {
         let mut c = Compiler {
             insts: Vec::with_capacity(100),
             names: Vec::with_capacity(10),
@@ -116,13 +109,12 @@ impl Program {
             }
         }
 
-        let names = c.names.clone();
-        Program {
-            regex: regex.into_owned(),
+        let names = c.names.as_slice().into_owned();
+        let prog = Program {
             insts: c.insts,
-            names: names,
             prefix: pre.into_owned(),
-        }
+        };
+        (prog, names)
     }
 
     /// Returns the total number of capture groups in the regular expression.

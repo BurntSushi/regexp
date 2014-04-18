@@ -42,7 +42,7 @@ docs: $(REGEXP_LIB_FILES) $(REGEXP_MACRO_LIB_FILES)
 	# WTF is rustdoc doing?
 	chmod 755 doc
 	in-dir doc fix-perms
-	# rscp ./doc/* gopher:~/www/burntsushi.net/rustdoc/ 
+	rscp ./doc/* gopher:~/www/burntsushi.net/rustdoc/exp/
 
 test: build/tests
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests

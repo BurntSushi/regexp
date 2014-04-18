@@ -70,7 +70,7 @@
 //! extern crate regexp;
 //!
 //! fn main() {
-//!     static re: regexp::Regexp = regexp!(r"^\d{4}-\d{2}-\d{2}$");
+//!     let re = regexp!(r"^\d{4}-\d{2}-\d{2}$");
 //!     assert_eq!(re.is_match("2014-01-01"), true);
 //! }
 //! ```
@@ -103,8 +103,8 @@
 //! ```rust
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-//! # use regexp::Regexp; fn main() {
-//! static re: Regexp = regexp!(r"(\d{4})-(\d{2})-(\d{2})");
+//! # fn main() {
+//! let re = regexp!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! for cap in re.captures_iter(text) {
 //!     println!("Month: {} Day: {} Year: {}", cap.at(2), cap.at(3), cap.at(1));
@@ -129,8 +129,8 @@
 //! ```rust
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-//! # use regexp::Regexp; fn main() {
-//! static re: Regexp = regexp!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
+//! # fn main() {
+//! let re = regexp!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! let after = re.replace_all(before, "$m/$d/$y");
 //! assert_eq!(after, ~"03/14/2012, 01/01/2013 and 07/05/2014");
@@ -175,8 +175,8 @@
 //! ```rust
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-//! # use regexp::Regexp; fn main() {
-//! static re: Regexp = regexp!(r"(?i)Δ+");
+//! # fn main() {
+//! let re = regexp!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
 //! # }
 //! ```
@@ -188,8 +188,8 @@
 //! ```rust
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-//! # use regexp::Regexp; fn main() {
-//! static re: Regexp = regexp!(r"[\pN\p{Greek}\p{Cherokee}]+");
+//! # fn main() {
+//! let re = regexp!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
 //! # }
 //! ```
@@ -285,8 +285,8 @@
 //! ```rust
 //! # #![feature(phase)]
 //! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-//! # use regexp::Regexp; fn main() {
-//! static re: Regexp = regexp!(r"(?i)a+(?-i)b+");
+//! # fn main() {
+//! let re = regexp!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
 //! assert_eq!(cap.at(0), "AaAaAbb");
 //! # }
@@ -375,7 +375,7 @@ extern crate rand;
 extern crate regexp;
 
 pub use parse::Error;
-pub use re::{Regexp, Dynamic, Captures, SubCaptures, SubCapturesPos};
+pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
 pub use re::{FindCaptures, FindMatches};
 pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
 pub use re::{quote, is_match, regexp};
@@ -411,6 +411,7 @@ pub mod program {
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation, which is an acceptable compromise IMO.
     pub use super::parse::Flags;
+    pub use super::re::{Dynamic, Native};
     pub use super::compile::{
         Program,
         Inst, OneChar, CharClass, Any, Save, Jump, Split,

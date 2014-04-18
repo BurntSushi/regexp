@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use regexp::{Regexp, Dynamic, NoExpand};
+use regexp::{Regexp, NoExpand};
 
 #[test]
 fn splitn() {
@@ -56,7 +56,7 @@ macro_rules! noparse(
         #[test]
         fn $name() {
             let re = $re;
-            match Dynamic::new(re) {
+            match Regexp::new(re) {
                 Err(_) => {},
                 Ok(_) => fail!("Regexp '{}' should cause a parse error.", re),
             }
