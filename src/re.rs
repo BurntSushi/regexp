@@ -37,11 +37,16 @@ pub fn quote(text: &str) -> ~str {
 ///
 /// To find submatches, split or replace text, you'll need to compile an
 /// expression first.
+///
+/// Note that you should prefer the `regexp!` macro when possible. For example,
+/// `regexp!("...").is_match("...")`.
 pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
 }
 
-/// Regexp is a compiled regular expression. It can be used to search, split
+/// Regexp is a compiled regular expression, represented as either a sequence
+/// of bytecode instructions (dynamic) or as a specialized Rust function
+/// (native). It can be used to search, split
 /// or replace text. All searching is done with an implicit `.*?` at the 
 /// beginning and end of an expression. To force an expression to match the 
 /// whole string (or a prefix or a suffix), you must use an anchor like `^` or 
@@ -57,8 +62,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 ///
 /// The only methods that allocate new strings are the string replacement 
 /// methods. All other methods (searching and splitting) return borrowed 
-/// pointers into the string given. (The underlying virtual machine does not 
-/// copy the search text either.)
+/// pointers into the string given.
 ///
 /// # Examples
 ///
@@ -87,9 +91,10 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// }
 /// ```
 ///
-/// `regexp!` can also be declared with `static` in a module scope.
 /// Given an incorrect regular expression, `regexp!` will cause the Rust 
 /// compiler to produce a compile time error.
+/// Note that `regexp!` will compile the expression to native Rust code, which
+/// makes it much faster when searching text.
 /// More details about the `regexp!` macro can be found in the `regexp` crate
 /// documentation.
 #[allow(visible_private_types)]

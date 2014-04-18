@@ -54,11 +54,19 @@
 //!
 //! # The `regexp!` macro
 //!
-//! Rust's compile time meta-programming facilities provide a way to write an 
+//! Rust's compile time meta-programming facilities provide a way to write a
 //! `regexp!` macro which compiles regular expressions *when your program 
 //! compiles*. Said differently, if you only use `regexp!` to build regular 
 //! expressions in your program, then your program cannot compile with an 
-//! invalid regular expression.
+//! invalid regular expression. Moreover, the `regexp!` macro compiles the
+//! given expression to native Rust code, which makes it much faster for
+//! searching text.
+//!
+//! Since `regexp!` provides compiled regular expressions that are both safer 
+//! and faster to use, you should use them whenever possible. The only 
+//! requirement for using them is that you have a string literal corresponding 
+//! to your expression. Otherwise, it is indistinguishable from an expression 
+//! compiled at runtime with `Regexp::new`.
 //!
 //! To use the `regexp!` macro, you must enable the `phase` feature and import 
 //! the `regexp_macros` crate as a syntax extension:
@@ -76,22 +84,9 @@
 //! ```
 //!
 //! There are a few things worth mentioning about using the `regexp!` macro. 
-//! Firstly, it compiles an expression to *static* data, which means it can 
-//! live in the module scope in addition to function scope (as shown in the 
-//! previous example).
-//! Secondly, the `regexp!` macro *only* accepts string *literals*.
-//! Thirdly, the `regexp` crate *must* be linked with the name `regexp` since 
+//! Firstly, the `regexp!` macro *only* accepts string *literals*.
+//! Secondly, the `regexp` crate *must* be linked with the name `regexp` since 
 //! the generated code depends on finding symbols in the `regexp` crate.
-//!
-//! In general, one should use the `regexp!` macro whenever possible since it 
-//! eliminates an entire class of bugs and incurs no runtime cost for 
-//! compilation of a regular expression. If your regular expression isn't known 
-//! until runtime, then you can use `Regexp::new`.
-//!
-//! Finally, note that an expression of the form 
-//! `regexp!("...").is_match("...")` is not allowed since `regexp!` produces 
-//! static data that must live for the lifetime of the program. You must always 
-//! bind the result of `regexp!` to some named `static` variable.
 //!
 //! # Example: iterating over capture groups
 //!
