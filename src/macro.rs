@@ -42,18 +42,12 @@ use syntax::print::pprust;
 
 use regexp::Regexp;
 use regexp::program::{
-    Flags,
     Inst, OneChar, CharClass, Any, Save, Jump, Split,
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Program, Dynamic, Native,
+    FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
+    FLAG_SWAP_GREED, FLAG_NEGATED,
 };
-
-static FLAG_EMPTY:      u8 = 0;
-static FLAG_NOCASE:     u8 = 1 << 0; // i
-static FLAG_MULTI:      u8 = 1 << 1; // m
-static FLAG_DOTNL:      u8 = 1 << 2; // s
-static FLAG_SWAP_GREED: u8 = 1 << 3; // U
-static FLAG_NEGATED:    u8 = 1 << 4; // char class or not word boundary
 
 /// For the `regexp!` syntax extension. Do not use.
 #[macro_registrar]

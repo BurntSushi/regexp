@@ -410,11 +410,14 @@ pub mod program {
     //
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation, which is an acceptable compromise IMO.
-    pub use super::parse::Flags;
-    pub use super::re::{Dynamic, Native};
     pub use super::compile::{
         Program,
         Inst, OneChar, CharClass, Any, Save, Jump, Split,
         Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     };
+    pub use super::parse::{
+        FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
+        FLAG_SWAP_GREED, FLAG_NEGATED,
+    };
+    pub use super::re::{Dynamic, Native};
 }
