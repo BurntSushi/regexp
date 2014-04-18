@@ -45,6 +45,7 @@ use regexp::program::{
     Inst, OneChar, CharClass, Any, Save, Jump, Split,
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Program, Dynamic, Native,
+    PERLW,
     FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
     FLAG_SWAP_GREED, FLAG_NEGATED,
 };
@@ -99,6 +100,16 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     let check_prefix = mk_check_prefix(cx, sp, prog);
     let step_insts = mk_step_insts(cx, sp, prog);
     let add_insts = mk_add_insts(cx, sp, prog);
+    let word_match =
+        if has_word_boundary(prog.insts.as_slice()) {
+            let word_classes = mk_match_class(cx, sp, false, PERLW);
+            quote_expr!(&*cx, {
+                let c = match c { None => return false, Some(c) => c };
+                $word_classes
+            })
+        } else {
+            quote_expr!(&*cx, false)
+        };
     let expr = quote_expr!(&*cx, {
         fn exec<'t>(which: ::regexp::program::MatchKind, input: &'t str,
                     start: uint, end: uint) -> ~[Option<uint>] {
@@ -212,11 +223,9 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                 }
 
                 #[allow(dead_code)]
+                #[allow(unused_variable)]
                 fn is_word(&self, c: Option<char>) -> bool {
-                    let c = match c { None => return false, Some(c) => c };
-                    c == $under
-                    || (c >= $zero && c <= $nine)
-                    || (c >= $a && c <= $z) || (c >= $ca && c <= $cz)
+                    $word_match
                 }
             }
 
@@ -384,6 +393,16 @@ impl ToTokens for bool {
     fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
         vec!(TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
     }
+}
+
+fn has_word_boundary(insts: &[Inst]) -> bool {
+    for inst in insts.iter() {
+        match *inst {
+            EmptyWordBoundary(_) => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @Expr {
