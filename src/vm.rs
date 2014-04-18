@@ -40,6 +40,7 @@ use super::compile::{
     Save, Jump, Split,
 };
 use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
+use super::parse::unicode::PERLW;
 
 pub type CaptureLocs = ~[Option<uint>];
 
@@ -321,9 +322,7 @@ impl<'r, 't> Nfa<'r, 't> {
 
     fn is_word(&self, c: Option<char>) -> bool {
         let c = match c { None => return false, Some(c) => c };
-        c == '_'
-        || (c >= '0' && c <= '9')
-        || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+        PERLW.bsearch(|&rc| class_cmp(false, c, rc)).is_some()
     }
 
     // FIXME: For case insensitive comparisons, it uses the uppercase

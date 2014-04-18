@@ -251,8 +251,8 @@
 //! $     the end of text
 //! \A    only the beginning of text (even with multi-line mode enabled)
 //! \z    only the end of text (even with multi-line mode enabled)
-//! \b    an ASCII word boundary (\w on one side and \W, \A, or \z on other)
-//! \B    not an ASCII word boundary
+//! \b    a Unicode word boundary (\w on one side and \W, \A, or \z on other)
+//! \B    a Unicode word boundary
 //! </pre>
 //!
 //! ## Grouping and flags
@@ -310,15 +310,15 @@
 //! \x{10FFFF} any hex character code corresponding to a valid UTF8 codepoint
 //! </pre>
 //!
-//! ## Perl character classes
+//! ## Perl character classes (Unicode friendly)
 //!
 //! <pre class="rust">
-//! \d     digit ([0-9])
+//! \d     digit ([0-9] + \p{Nd})
 //! \D     not digit
-//! \s     whitespace ([\t\n\f\r ])
+//! \s     whitespace ([\t\n\f\r ] + \p{Z})
 //! \S     not whitespace
-//! \w     ASCII word character ([0-9A-Za-z_])
-//! \W     not ASCII word character
+//! \w     word character ([0-9A-Za-z_] + \p{L})
+//! \W     not word character
 //! </pre>
 //!
 //! ## ASCII character classes
