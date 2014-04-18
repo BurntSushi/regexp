@@ -6,11 +6,11 @@ RUSTFLAGS ?= --opt-level=3 -g
 RUSTTESTFLAGS ?= -L $(RUST_PATH)
 REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
 REGEXP_LIB_FILES = src/compile.rs src/lib.rs src/parse.rs src/re.rs \
-									 src/unicode.rs src/vm.rs \
-									 src/test/bench.rs src/test/macro.rs src/test/matches.rs \
-									 src/test/mod.rs src/test/tests.rs
+									 src/unicode.rs src/vm.rs
 REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
 REGEXP_MACRO_LIB_FILES = src/macro.rs
+REGEXP_TEST_FILES = src/test/bench.rs src/test/macro.rs src/test/matches.rs \
+									  src/test/mod.rs src/test/tests.rs
 MOZILLA_RUST ?= $(HOME)/clones/rust
 REGEXP_DYN_FLAGS =
 
@@ -52,7 +52,7 @@ docs: $(REGEXP_LIB_FILES) $(REGEXP_MACRO_LIB_FILES)
 test: build/tests
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests
 
-build/tests: $(REGEXP_LIB) $(REGEXP_MACRO_LIB)
+build/tests: $(REGEXP_LIB) $(REGEXP_MACRO_LIB) $(REGEXP_TEST_FILES)
 	rustc $(RUSTTESTFLAGS) -L $(RUST_PATH) --test $(REGEXP_DYN_FLAGS) src/lib.rs -o ./build/tests
 
 bench: build/bench
@@ -61,7 +61,7 @@ bench: build/bench
 bench-perf: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp perf record -g --call-graph dwarf -s ./build/bench --bench
 
-build/bench: src/test/bench.rs
+build/bench: $(REGEXP_LIB) $(REGEXP_MACRO_LIB) $(REGEXP_TEST_FILES)
 	rustc $(RUSTFLAGS) -Z lto -L $(RUST_PATH) --test --cfg bench $(REGEXP_DYN_FLAGS) src/lib.rs -o ./build/bench
 
 scratch: build/scratch
