@@ -501,7 +501,7 @@ fn class_cmp(casei: bool, mut textc: char,
 /// If `needle` is not in `haystack`, then `None` is returned.
 ///
 /// Note that this is using a naive substring algorithm.
-fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
+pub fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
     if needle.len() > haystack.len() || needle.len() == 0 {
         return None
     }

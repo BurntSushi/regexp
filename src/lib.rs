@@ -415,5 +415,5 @@ pub mod program {
     };
     pub use super::parse::unicode::PERLW;
     pub use super::re::{Dynamic, Native};
-    pub use vm::{MatchKind, Exists, Location, Submatches};
+    pub use super::vm::{MatchKind, Exists, Location, Submatches, find_prefix};
 }

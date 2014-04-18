@@ -18,8 +18,6 @@
 
 #![feature(macro_registrar, managed_boxes, quote)]
 
-#![allow(unused_imports, unused_variable, dead_code)]
-
 //! This crate provides the `regexp!` macro. Its use is documented in the 
 //! `regexp` crate.
 
@@ -31,12 +29,12 @@ use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
 use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
 use syntax::codemap::{Span, DUMMY_SP};
 use syntax::ext::base::{
-    SyntaxExtension, ExtCtxt, MacResult, MRItem, MRExpr, MRAny, AnyMacro,
+    SyntaxExtension, ExtCtxt, MacResult, MRExpr,
     NormalTT, BasicMacroExpander,
 };
 use syntax::parse;
 use syntax::parse::token;
-use syntax::parse::token::{EOF, LIT_CHAR, IDENT, COMMA};
+use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 
 use syntax::print::pprust;
 
@@ -46,8 +44,7 @@ use regexp::program::{
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Program, Dynamic, Native,
     PERLW,
-    FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
-    FLAG_SWAP_GREED, FLAG_NEGATED,
+    FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED,
 };
 
 /// For the `regexp!` syntax extension. Do not use.
@@ -55,13 +52,31 @@ use regexp::program::{
 pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
     reg(token::intern("regexp"),
         NormalTT(~BasicMacroExpander {
-            expander: re_static,
+            expander: native,
             span: None,
         },
         None));
 }
 
-fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
+/// Generates specialized code for the Pike VM for a particular regular
+/// expression.
+///
+/// There are two primary differences between the code generated here and the
+/// general code in vm.rs.
+///
+/// 1. All heap allocated is removed. Sized vector types are used instead.
+///    Care must be taken to make sure that these vectors are not copied
+///    gratuitously. (If you're not sure, run the benchmarks. They will yell
+///    at you if you do.)
+/// 2. The main `match instruction { ... }` expressions are replaced with more
+///    direct `match pc { ... }`. The generators can be found in 
+///    `mk_step_insts` and `mk_add_insts`.
+///
+/// Other more minor changes include eliding code when possible (although this
+/// isn't completely thorough at the moment), and translating character class
+/// matching from using a binary search to a simple `match` expression (see
+/// `mk_match_class`).
+fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     let regex = match parse(cx, tts) {
         Some(r) => r,
         None => return MacResult::dummy_expr(sp),
@@ -78,7 +93,6 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         Native(_) => unreachable!(),
     };
 
-    let (under, zero, nine, a, z, ca, cz) = ('_', '0', '9', 'a', 'z', 'A', 'Z');
     let num_cap_locs = 2 * prog.num_captures();
     let num_insts = prog.insts.len();
     let cap_names = as_expr_vec(cx, sp, re.names,
@@ -172,7 +186,8 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                             let step_state = self.step(&mut groups, nlist,
                                                        clist.groups(i), pc);
                             match step_state {
-                                StepMatchEarlyReturn => return [Some(0u), Some(0u)].into_owned(),
+                                StepMatchEarlyReturn =>
+                                    return [Some(0u), Some(0u)].into_owned(),
                                 StepMatch => { matched = true; clist.empty() },
                                 StepContinue => {},
                             }
@@ -342,27 +357,6 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
                     &'r mut self.queue[i].groups
                 }
             }
-
-            #[allow(dead_code)]
-            fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
-                if needle.len() > haystack.len() || needle.len() == 0 {
-                    return None
-                }
-                let mut hayi = 0u;
-                'HAYSTACK: loop {
-                    if hayi > haystack.len() - needle.len() {
-                        break
-                    }
-                    for nedi in ::std::iter::range(0, needle.len()) {
-                        if haystack[hayi+nedi] != needle[nedi] {
-                            hayi += 1;
-                            continue 'HAYSTACK
-                        }
-                    }
-                    return Some(hayi)
-                }
-                None
-            }
         }
         ::regexp::Regexp {
             original: ~$regex,
@@ -377,7 +371,6 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
 // don't think it's exported.
 // Interestingly, quote_expr! only requires that a 'to_tokens' method be
 // defined rather than satisfying a particular trait.
-// I think these should be included in the `syntax` crate anyway.
 #[doc(hidden)]
 trait ToTokens {
     fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
@@ -422,7 +415,7 @@ fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @Expr) -> ast::Arm {
     }
 }
 
-fn mk_any_arm(cx: &mut ExtCtxt, sp: Span, e: @Expr) -> ast::Arm {
+fn mk_any_arm(sp: Span, e: @Expr) -> ast::Arm {
     ast::Arm {
         pats: vec!(@ast::Pat{
             id: DUMMY_NODE_ID,
@@ -454,7 +447,7 @@ fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
     }).collect::<Vec<ast::Arm>>();
 
     let nada = quote_expr!(&*cx, false);
-    arms.push(mk_any_arm(cx, sp, nada));
+    arms.push(mk_any_arm(sp, nada));
 
     let match_on = quote_expr!(&*cx, c);
     as_expr(sp, ast::ExprMatch(match_on, arms))
@@ -544,7 +537,7 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     }).collect::<Vec<ast::Arm>>();
 
     let nada = quote_expr!(&*cx, {});
-    arms.push(mk_any_arm(cx, sp, nada));
+    arms.push(mk_any_arm(sp, nada));
     let m = mk_match_insts(cx, sp, arms);
     m
 }
@@ -647,7 +640,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     }).collect::<Vec<ast::Arm>>();
 
     let nada = quote_expr!(&*cx, {});
-    arms.push(mk_any_arm(cx, sp, nada));
+    arms.push(mk_any_arm(sp, nada));
     let m = mk_match_insts(cx, sp, arms);
     m
 }
@@ -661,7 +654,7 @@ fn mk_check_prefix(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
         quote_expr!(&*cx,
             if clist.size == 0 {
                 let haystack = self.input.as_bytes().slice_from(self.ic);
-                match find_prefix($bytes, haystack) {
+                match ::regexp::program::find_prefix($bytes, haystack) {
                     None => break,
                     Some(i) => {
                         self.ic += i;
@@ -677,10 +670,6 @@ fn vec_from_fn(cx: &mut ExtCtxt, sp: Span, len: uint,
                to_expr: |&mut ExtCtxt| -> @Expr) -> @Expr {
     as_expr_vec(cx, sp, Vec::from_elem(len, ()).as_slice(),
                 |cx, _, _| to_expr(cx))
-}
-
-fn vec_from_elem(cx: &mut ExtCtxt, sp: Span, len: uint, rep: @Expr) -> @Expr {
-    as_expr_vec(cx, sp, Vec::from_elem(len, ()).as_slice(), |_, _, _| rep)
 }
 
 fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
@@ -730,62 +719,4 @@ fn parse(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<~str> {
         return None;
     }
     Some(regex)
-}
-
-fn parse_with_name(cx: &mut ExtCtxt, tts: &[TokenTree])
-                  -> Option<(ast::Ident, ~str)> {
-    let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
-                                                Vec::from_slice(tts));
-    let entry = parser.parse_expr();
-    let type_name = match entry.node {
-        ast::ExprPath(ref p) => {
-            if p.segments.len() != 1 || p.global {
-                cx.span_err(entry.span, format!(
-                    "expected valid type name but got `{}`",
-                    pprust::expr_to_str(entry)));
-                return None
-            }
-            p.segments.get(0).identifier.clone()
-        }
-        _ => {
-            cx.span_err(entry.span, format!(
-                "expected valid type name but got `{}`",
-                pprust::expr_to_str(entry)));
-            return None
-        }
-    };
-
-    match parser.token {
-        COMMA => parser.bump(),
-        _ => {
-            cx.span_err(entry.span, format!(
-                "expected comma but got `{:?}`", parser.token));
-        }
-    }
-
-    let entry = parser.parse_expr();
-    let regex = match entry.node {
-        ExprLit(lit) => {
-            match lit.node {
-                LitStr(ref s, _) => s.to_str(),
-                _ => {
-                    cx.span_err(entry.span, format!(
-                        "expected string literal but got `{}`",
-                        pprust::lit_to_str(lit)));
-                    return None
-                }
-            }
-        }
-        _ => {
-            cx.span_err(entry.span, format!(
-                "expected string literal but got `{}`",
-                pprust::expr_to_str(entry)));
-            return None
-        }
-    };
-    if !parser.eat(&EOF) {
-        cx.span_err(parser.span, "only one string literal allowed");
-        return None;
-    }
-    Some((type_name, regex))
 }
