@@ -34,12 +34,8 @@ use syntax::ext::base::{
 };
 use syntax::parse;
 use syntax::parse::token;
-use syntax::parse::token::{EOF, LIT_CHAR, IDENT, LIT_INT_UNSUFFIXED};
+use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 use syntax::print::pprust;
-
-use std::u8;
-use std::u16;
-use std::u32;
 
 use regexp::Regexp;
 use regexp::native::{
@@ -95,18 +91,8 @@ fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         Native(_) => unreachable!(),
     };
 
-    let num_insts = prog.insts.len() as u64;
-    let pctype = 
-        if num_insts <= u8::MAX as u64 {
-            quote_ty!(&*cx, u8)
-        } else if num_insts <= u16::MAX as u64 {
-            quote_ty!(&*cx, u16)
-        } else if num_insts <= u32::MAX as u64 {
-            quote_ty!(&*cx, u32)
-        } else {
-            quote_ty!(&*cx, u64)
-        };
     let num_cap_locs = 2 * prog.num_captures();
+    let num_insts = prog.insts.len();
     let cap_names = as_expr_vec(cx, sp, re.names,
         |cx, _, name| match name {
             &Some(ref name) => {
@@ -207,12 +193,12 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         #[allow(unused_variable)]
         #[inline(always)]
         fn step(&self, groups: &mut Captures, nlist: &mut Threads,
-                caps: &mut Captures, pc: $pctype) -> StepState {
+                caps: &mut Captures, pc: uint) -> StepState {
             $step_insts
             StepContinue
         }
 
-        fn add(&self, nlist: &mut Threads, pc: $pctype,
+        fn add(&self, nlist: &mut Threads, pc: uint,
                groups: &mut Captures) {
             if nlist.contains(pc) {
                 return
@@ -222,15 +208,15 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     }
 
     struct Thread {
-        pc: $pctype,
+        pc: uint,
         groups: Captures,
     }
 
     struct Threads {
         which: MatchKind,
         queue: [Thread, ..$num_insts],
-        sparse: [$pctype, ..$num_insts],
-        size: $pctype,
+        sparse: [uint, ..$num_insts],
+        size: uint,
     }
 
     impl Threads {
@@ -244,8 +230,8 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         }
 
         #[inline(always)]
-        fn add(&mut self, pc: $pctype, groups: &Captures) {
-            let t = &mut self.queue[self.size as uint];
+        fn add(&mut self, pc: uint, groups: &Captures) {
+            let t = &mut self.queue[self.size];
             t.pc = pc;
             match self.which {
                 Exists => {},
@@ -257,21 +243,21 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     unsafe { t.groups.copy_memory(groups.as_slice()) }
                 }
             }
-            self.sparse[pc as uint] = self.size;
+            self.sparse[pc] = self.size;
             self.size += 1;
         }
 
         #[inline(always)]
-        fn add_empty(&mut self, pc: $pctype) {
-            self.queue[self.size as uint].pc = pc;
-            self.sparse[pc as uint] = self.size;
+        fn add_empty(&mut self, pc: uint) {
+            self.queue[self.size].pc = pc;
+            self.sparse[pc] = self.size;
             self.size += 1;
         }
 
         #[inline(always)]
-        fn contains(&self, pc: $pctype) -> bool {
-            let s = self.sparse[pc as uint];
-            s < self.size && self.queue[s as uint].pc == pc
+        fn contains(&self, pc: uint) -> bool {
+            let s = self.sparse[pc];
+            s < self.size && self.queue[s].pc == pc
         }
 
         #[inline(always)]
@@ -280,13 +266,13 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         }
 
         #[inline(always)]
-        fn pc(&self, i: $pctype) -> $pctype {
-            self.queue[i as uint].pc
+        fn pc(&self, i: uint) -> uint {
+            self.queue[i].pc
         }
 
         #[inline(always)]
-        fn groups<'r>(&'r mut self, i: $pctype) -> &'r mut Captures {
-            &'r mut self.queue[i as uint].groups
+        fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
+            &'r mut self.queue[i].groups
         }
     }
 }
@@ -320,27 +306,17 @@ impl ToTokens for bool {
     }
 }
 
-struct UntypedNum(uint);
-
-impl ToTokens for UntypedNum {
-    fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
-        let UntypedNum(n) = *self;
-        vec!(TTTok(DUMMY_SP, LIT_INT_UNSUFFIXED(n as i64)))
-    }
-}
-
 fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @Expr {
     let mat_pc = quote_expr!(&*cx, pc);
     as_expr(sp, ast::ExprMatch(mat_pc, arms))
 }
 
 fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @Expr) -> ast::Arm {
-    let curpc = UntypedNum(pc);
     ast::Arm {
         pats: vec!(@ast::Pat{
             id: DUMMY_NODE_ID,
             span: sp,
-            node: ast::PatLit(quote_expr!(&*cx, $curpc)),
+            node: ast::PatLit(quote_expr!(&*cx, $pc)),
         }),
         guard: None,
         body: body,
@@ -387,7 +363,7 @@ fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
 
 fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
-        let nextpc = UntypedNum(pc + 1);
+        let nextpc = pc + 1;
         let body = match *inst {
             Match => {
                 quote_expr!(&*cx, {
@@ -476,8 +452,7 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
 
 fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
-        let curpc = UntypedNum(pc);
-        let nextpc = UntypedNum(pc + 1);
+        let nextpc = pc + 1;
         let body = match *inst {
             EmptyBegin(flags) => {
                 let nl = '\n';
@@ -490,7 +465,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                         quote_expr!(&*cx, self.chars.is_begin())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add_empty($curpc);
+                    nlist.add_empty($pc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -505,7 +480,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                         quote_expr!(&*cx, self.chars.is_end())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add_empty($curpc);
+                    nlist.add_empty($pc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -517,7 +492,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                         quote_expr!(&*cx, self.chars.is_word_boundary())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add_empty($curpc);
+                    nlist.add_empty($pc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -527,7 +502,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                 // right over it every time.
                 if slot > 1 {
                     quote_expr!(&*cx, {
-                        nlist.add_empty($curpc);
+                        nlist.add_empty($pc);
                         match self.which {
                             Submatches => {
                                 let old = groups[$slot];
@@ -540,7 +515,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                     })
                 } else {
                     quote_expr!(&*cx, {
-                        nlist.add_empty($curpc);
+                        nlist.add_empty($pc);
                         match self.which {
                             Submatches | Location => {
                                 let old = groups[$slot];
@@ -554,22 +529,20 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                 }
             }
             Jump(to) => {
-                let to = UntypedNum(to);
                 quote_expr!(&*cx, {
-                    nlist.add_empty($curpc);
+                    nlist.add_empty($pc);
                     self.add(nlist, $to, groups);
                 })
             }
             Split(x, y) => {
-                let (x, y) = (UntypedNum(x), UntypedNum(y));
                 quote_expr!(&*cx, {
-                    nlist.add_empty($curpc);
+                    nlist.add_empty($pc);
                     self.add(nlist, $x, groups);
                     self.add(nlist, $y, groups);
                 })
             }
             // For Match, OneChar, CharClass, Any
-            _ => quote_expr!(&*cx, nlist.add($curpc, groups)),
+            _ => quote_expr!(&*cx, nlist.add($pc, groups)),
         };
         mk_inst_arm(cx, sp, pc, body)
     }).collect::<Vec<ast::Arm>>();
