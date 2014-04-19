@@ -4,34 +4,34 @@ Rust
 rustc --opt-level=3 -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
 ./build/bench --bench
 
-literal                                 133 ns/iter (+/- 0)
-not_literal                             902 ns/iter (+/- 3)
-match_class                            1327 ns/iter (+/- 3)
-match_class_in_range                   1264 ns/iter (+/- 3)
-replace_all                            1211 ns/iter (+/- 24)
-anchored_literal_short_non_match        429 ns/iter (+/- 0)
-anchored_literal_long_non_match        5816 ns/iter (+/- 32)
-anchored_literal_short_match            139 ns/iter (+/- 0)
-anchored_literal_long_match             150 ns/iter (+/- 4)
-one_pass_short_a                       1082 ns/iter (+/- 5)
-one_pass_short_a_not                   1319 ns/iter (+/- 8)
-one_pass_short_b                        767 ns/iter (+/- 5)
-one_pass_short_b_not                   1034 ns/iter (+/- 4)
-one_pass_long_prefix                    521 ns/iter (+/- 13)
-one_pass_long_prefix_not                557 ns/iter (+/- 14)
-easy0_32                                132 ns/iter (+/- 4) = 242 MB/s
-easy0_1K                               1418 ns/iter (+/- 199) = 722 MB/s
-easy0_32K                             42221 ns/iter (+/- 2043) = 776 MB/s
-easy1_32                                168 ns/iter (+/- 73) = 190 MB/s
-easy1_1K                               1586 ns/iter (+/- 457) = 645 MB/s
-easy1_32K                             46106 ns/iter (+/- 3259) = 710 MB/s
-medium_32                               623 ns/iter (+/- 30) = 51 MB/s
-medium_1K                             15422 ns/iter (+/- 234) = 66 MB/s
-medium_32K                           489476 ns/iter (+/- 1625) = 66 MB/s
-hard_32                                1140 ns/iter (+/- 18) = 28 MB/s
-hard_1K                               32030 ns/iter (+/- 157) = 31 MB/s
-hard_32K                            1019943 ns/iter (+/- 2539) = 32 MB/s
-no_exponential                       278785 ns/iter (+/- 270)
+literal                                 129 ns/iter (+/- 2)
+not_literal                             900 ns/iter (+/- 7)
+match_class                            1325 ns/iter (+/- 10)
+match_class_in_range                   1262 ns/iter (+/- 10)
+replace_all                            1237 ns/iter (+/- 18)
+anchored_literal_short_non_match        428 ns/iter (+/- 2)
+anchored_literal_long_non_match        5815 ns/iter (+/- 58)
+anchored_literal_short_match            154 ns/iter (+/- 0)
+anchored_literal_long_match             139 ns/iter (+/- 1)
+one_pass_short_a                       1044 ns/iter (+/- 10)
+one_pass_short_a_not                   1409 ns/iter (+/- 19)
+one_pass_short_b                        767 ns/iter (+/- 8)
+one_pass_short_b_not                   1030 ns/iter (+/- 16)
+one_pass_long_prefix                    523 ns/iter (+/- 4)
+one_pass_long_prefix_not                510 ns/iter (+/- 12)
+easy0_32                                136 ns/iter (+/- 2) = 235 MB/s
+easy0_1K                               1366 ns/iter (+/- 118) = 749 MB/s
+easy0_32K                             41048 ns/iter (+/- 789) = 798 MB/s
+easy1_32                                169 ns/iter (+/- 104) = 189 MB/s
+easy1_1K                               1551 ns/iter (+/- 471) = 660 MB/s
+easy1_32K                             47432 ns/iter (+/- 3134) = 690 MB/s
+medium_32                               608 ns/iter (+/- 27) = 52 MB/s
+medium_1K                             14912 ns/iter (+/- 252) = 68 MB/s
+medium_32K                           472955 ns/iter (+/- 6502) = 69 MB/s
+hard_32                                1159 ns/iter (+/- 43) = 27 MB/s
+hard_1K                               32916 ns/iter (+/- 802) = 31 MB/s
+hard_32K                            1046677 ns/iter (+/- 14354) = 31 MB/s
+no_exponential                       280041 ns/iter (+/- 7137)
 ```
 
 Golang

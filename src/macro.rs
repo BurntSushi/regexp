@@ -39,11 +39,10 @@ use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 use syntax::print::pprust;
 
 use regexp::Regexp;
-use regexp::program::{
-    Inst, OneChar, CharClass, Any, Save, Jump, Split,
+use regexp::native::{
+    OneChar, CharClass, Any, Save, Jump, Split,
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Program, Dynamic, Native,
-    PERLW,
     FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED,
 };
 
@@ -114,255 +113,171 @@ fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
     let check_prefix = mk_check_prefix(cx, sp, prog);
     let step_insts = mk_step_insts(cx, sp, prog);
     let add_insts = mk_add_insts(cx, sp, prog);
-    let word_match =
-        if has_word_boundary(prog.insts.as_slice()) {
-            let word_classes = mk_match_class(cx, sp, false, PERLW);
-            quote_expr!(&*cx, {
-                let c = match c { None => return false, Some(c) => c };
-                $word_classes
-            })
-        } else {
-            quote_expr!(&*cx, false)
-        };
     let expr = quote_expr!(&*cx, {
-        fn exec<'t>(which: ::regexp::program::MatchKind, input: &'t str,
-                    start: uint, end: uint) -> ~[Option<uint>] {
-            use regexp::program::{MatchKind, Exists, Location, Submatches};
+fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
+            start: uint, end: uint) -> ~[Option<uint>] {
+    #![allow(unused_imports)]
+    use regexp::native::{
+        MatchKind, Exists, Location, Submatches,
+        StepState, StepMatchEarlyReturn, StepMatch, StepContinue,
+        CharReader, find_prefix,
+    };
 
-            return Nfa {
+    return Nfa {
+        which: which,
+        input: input,
+        ic: 0,
+        chars: CharReader::new(input),
+    }.run(start, end);
+
+    type Captures = [Option<uint>, ..$num_cap_locs];
+
+    struct Nfa<'t> {
+        which: MatchKind,
+        input: &'t str,
+        ic: uint,
+        chars: CharReader<'t>,
+    }
+
+    impl<'t> Nfa<'t> {
+        fn run(&mut self, start: uint, end: uint) -> ~[Option<uint>] {
+            let mut matched = false;
+            let mut clist = &mut Threads::new(self.which);
+            let mut nlist = &mut Threads::new(self.which);
+
+            let mut groups = $init_groups;
+
+            self.ic = start;
+            let mut next_ic = self.chars.set(start);
+            while self.ic <= end {
+                if clist.size == 0 {
+                    if matched {
+                        break
+                    }
+                    $check_prefix
+                }
+                if clist.size == 0 || (!$prefix_anchor && !matched) {
+                    self.add(clist, 0, &mut groups)
+                }
+
+                self.ic = next_ic;
+                next_ic = self.chars.advance();
+
+                let mut i = 0;
+                while i < clist.size {
+                    let pc = clist.pc(i);
+                    let step_state = self.step(&mut groups, nlist,
+                                               clist.groups(i), pc);
+                    match step_state {
+                        StepMatchEarlyReturn =>
+                            return [Some(0u), Some(0u)].into_owned(),
+                        StepMatch => { matched = true; clist.empty() },
+                        StepContinue => {},
+                    }
+                    i += 1;
+                }
+                ::std::mem::swap(&mut clist, &mut nlist);
+                nlist.empty();
+            }
+            match self.which {
+                Exists if matched     => ~[Some(0u), Some(0u)],
+                Exists                => ~[None, None],
+                Location | Submatches => groups.into_owned(),
+            }
+        }
+
+        // Sometimes `nlist` is never used (for empty regexes).
+        #[allow(unused_variable)]
+        #[inline(always)]
+        fn step(&self, groups: &mut Captures, nlist: &mut Threads,
+                caps: &mut Captures, pc: uint) -> StepState {
+            $step_insts
+            StepContinue
+        }
+
+        fn add(&self, nlist: &mut Threads, pc: uint,
+               groups: &mut Captures) {
+            if nlist.contains(pc) {
+                return
+            }
+            $add_insts
+        }
+    }
+
+    struct Thread {
+        pc: uint,
+        groups: Captures,
+    }
+
+    struct Threads {
+        which: MatchKind,
+        queue: [Thread, ..$num_insts],
+        sparse: [uint, ..$num_insts],
+        size: uint,
+    }
+
+    impl Threads {
+        fn new(which: MatchKind) -> Threads {
+            Threads {
                 which: which,
-                input: input,
-                ic: 0,
-                chars: CharReader {
-                    input: input,
-                    prev: None,
-                    cur: None,
-                    next: 0,
-                },
-            }.run(start, end);
-
-            type Captures = [Option<uint>, ..$num_cap_locs];
-
-            struct Nfa<'t> {
-                which: MatchKind,
-                input: &'t str,
-                ic: uint,
-                chars: CharReader<'t>,
-            }
-
-            enum StepState {
-                StepMatchEarlyReturn,
-                StepMatch,
-                StepContinue,
-            }
-
-            impl<'t> Nfa<'t> {
-                fn run(&mut self, start: uint, end: uint) -> ~[Option<uint>] {
-                    let mut matched = false;
-                    let mut clist = &mut Threads::new(self.which);
-                    let mut nlist = &mut Threads::new(self.which);
-
-                    let mut groups = $init_groups;
-
-                    self.ic = start;
-                    let mut next_ic = self.chars.set(start);
-                    while self.ic <= end {
-                        if clist.size == 0 {
-                            if matched {
-                                break
-                            }
-                            $check_prefix
-                        }
-                        if clist.size == 0 || (!$prefix_anchor && !matched) {
-                            self.add(clist, 0, &mut groups)
-                        }
-
-                        self.ic = next_ic;
-                        next_ic = self.chars.advance();
-
-                        let mut i = 0;
-                        while i < clist.size {
-                            let pc = clist.pc(i);
-                            let step_state = self.step(&mut groups, nlist,
-                                                       clist.groups(i), pc);
-                            match step_state {
-                                StepMatchEarlyReturn =>
-                                    return [Some(0u), Some(0u)].into_owned(),
-                                StepMatch => { matched = true; clist.empty() },
-                                StepContinue => {},
-                            }
-                            i += 1;
-                        }
-                        ::std::mem::swap(&mut clist, &mut nlist);
-                        nlist.empty();
-                    }
-                    match self.which {
-                        Exists if matched     => ~[Some(0u), Some(0u)],
-                        Exists                => ~[None, None],
-                        Location | Submatches => groups.into_owned(),
-                    }
-                }
-
-                // Sometimes `nlist` is never used (for empty regexes).
-                #[allow(unused_variable)]
-                fn step(&self, groups: &mut Captures, nlist: &mut Threads,
-                        caps: &mut Captures, pc: uint)
-                       -> StepState {
-                    $step_insts
-                    StepContinue
-                }
-
-                fn add(&self, nlist: &mut Threads, pc: uint,
-                       groups: &mut Captures) {
-                    if nlist.contains(pc) {
-                        return
-                    }
-                    $add_insts
-                }
-
-                #[allow(dead_code)]
-                fn is_begin(&self) -> bool { self.chars.prev.is_none() }
-                #[allow(dead_code)]
-                fn is_end(&self) -> bool { self.chars.cur.is_none() }
-
-                #[allow(dead_code)]
-                fn is_word_boundary(&self) -> bool {
-                    if self.is_begin() {
-                        return self.is_word(self.chars.cur)
-                    }
-                    if self.is_end() {
-                        return self.is_word(self.chars.prev)
-                    }
-                    (self.is_word(self.chars.cur) && !self.is_word(self.chars.prev))
-                    || (self.is_word(self.chars.prev) && !self.is_word(self.chars.cur))
-                }
-
-                #[allow(dead_code)]
-                #[allow(unused_variable)]
-                fn is_word(&self, c: Option<char>) -> bool {
-                    $word_match
-                }
-            }
-
-            struct CharReader<'t> {
-                input: &'t str,
-                prev: Option<char>,
-                cur: Option<char>,
-                next: uint,
-            }
-
-            impl<'t> CharReader<'t> {
-                fn set(&mut self, ic: uint) -> uint {
-                    self.prev = None;
-                    self.cur = None;
-                    self.next = 0;
-
-                    if self.input.len() == 0 {
-                        return 1
-                    }
-                    if ic > 0 {
-                        let i = ::std::cmp::min(ic, self.input.len());
-                        let prev = self.input.char_range_at_reverse(i);
-                        self.prev = Some(prev.ch);
-                    }
-                    if ic < self.input.len() {
-                        let cur = self.input.char_range_at(ic);
-                        self.cur = Some(cur.ch);
-                        self.next = cur.next;
-                        self.next
-                    } else {
-                        self.input.len() + 1
-                    }
-                }
-
-                fn advance(&mut self) -> uint {
-                    self.prev = self.cur;
-                    if self.next < self.input.len() {
-                        let cur = self.input.char_range_at(self.next);
-                        self.cur = Some(cur.ch);
-                        self.next = cur.next;
-                    } else {
-                        self.cur = None;
-                        self.next = self.input.len() + 1;
-                    }
-                    self.next
-                }
-            }
-
-            struct Thread {
-                pc: uint,
-                groups: Captures,
-            }
-
-            struct Threads {
-                which: MatchKind,
-                queue: [Thread, ..$num_insts],
-                sparse: [uint, ..$num_insts],
-                size: uint,
-            }
-
-            impl Threads {
-                fn new(which: MatchKind) -> Threads {
-                    Threads {
-                        which: which,
-                        queue: unsafe { ::std::mem::uninit() },
-                        sparse: unsafe { ::std::mem::uninit() },
-                        size: 0,
-                    }
-                }
-
-                #[inline(always)]
-                fn add(&mut self, pc: uint, groups: &Captures) {
-                    let t = &mut self.queue[self.size];
-                    t.pc = pc;
-                    match self.which {
-                        Exists => {},
-                        Location => {
-                            t.groups[0] = groups[0];
-                            t.groups[1] = groups[1];
-                        }
-                        Submatches => {
-                            unsafe { t.groups.copy_memory(groups.as_slice()) }
-                        }
-                    }
-                    self.sparse[pc] = self.size;
-                    self.size += 1;
-                }
-
-                #[inline(always)]
-                fn add_empty(&mut self, pc: uint) {
-                    self.queue[self.size].pc = pc;
-                    self.sparse[pc] = self.size;
-                    self.size += 1;
-                }
-
-                #[inline(always)]
-                fn contains(&self, pc: uint) -> bool {
-                    let s = self.sparse[pc];
-                    s < self.size && self.queue[s].pc == pc
-                }
-
-                #[inline(always)]
-                fn empty(&mut self) {
-                    self.size = 0;
-                }
-
-                #[inline(always)]
-                fn pc(&self, i: uint) -> uint {
-                    self.queue[i].pc
-                }
-
-                #[inline(always)]
-                fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
-                    &'r mut self.queue[i].groups
-                }
+                queue: unsafe { ::std::mem::uninit() },
+                sparse: unsafe { ::std::mem::uninit() },
+                size: 0,
             }
         }
-        ::regexp::Regexp {
-            original: ~$regex,
-            names: ~$cap_names,
-            p: ::regexp::program::Native(exec),
+
+        #[inline(always)]
+        fn add(&mut self, pc: uint, groups: &Captures) {
+            let t = &mut self.queue[self.size];
+            t.pc = pc;
+            match self.which {
+                Exists => {},
+                Location => {
+                    t.groups[0] = groups[0];
+                    t.groups[1] = groups[1];
+                }
+                Submatches => {
+                    unsafe { t.groups.copy_memory(groups.as_slice()) }
+                }
+            }
+            self.sparse[pc] = self.size;
+            self.size += 1;
         }
+
+        #[inline(always)]
+        fn add_empty(&mut self, pc: uint) {
+            self.queue[self.size].pc = pc;
+            self.sparse[pc] = self.size;
+            self.size += 1;
+        }
+
+        #[inline(always)]
+        fn contains(&self, pc: uint) -> bool {
+            let s = self.sparse[pc];
+            s < self.size && self.queue[s].pc == pc
+        }
+
+        #[inline(always)]
+        fn empty(&mut self) {
+            self.size = 0;
+        }
+
+        #[inline(always)]
+        fn pc(&self, i: uint) -> uint {
+            self.queue[i].pc
+        }
+
+        #[inline(always)]
+        fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
+            &'r mut self.queue[i].groups
+        }
+    }
+}
+::regexp::Regexp {
+    original: ~$regex,
+    names: ~$cap_names,
+    p: ::regexp::native::Native(exec),
+}
     });
     MRExpr(expr)
 }
@@ -386,16 +301,6 @@ impl ToTokens for bool {
     fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
         vec!(TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
     }
-}
-
-fn has_word_boundary(insts: &[Inst]) -> bool {
-    for inst in insts.iter() {
-        match *inst {
-            EmptyWordBoundary(_) => return true,
-            _ => {}
-        }
-    }
-    false
 }
 
 fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @Expr {
@@ -551,10 +456,10 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                 let cond =
                     if flags & FLAG_MULTI > 0 {
                         quote_expr!(&*cx,
-                            self.is_begin() || self.chars.prev == Some($nl)
+                            self.chars.is_begin() || self.chars.prev == Some($nl)
                         )
                     } else {
-                        quote_expr!(&*cx, self.is_begin())
+                        quote_expr!(&*cx, self.chars.is_begin())
                     };
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
@@ -566,10 +471,10 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                 let cond =
                     if flags & FLAG_MULTI > 0 {
                         quote_expr!(&*cx,
-                            self.is_end() || self.chars.cur == Some($nl)
+                            self.chars.is_end() || self.chars.cur == Some($nl)
                         )
                     } else {
-                        quote_expr!(&*cx, self.is_end())
+                        quote_expr!(&*cx, self.chars.is_end())
                     };
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
@@ -579,9 +484,9 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
             EmptyWordBoundary(flags) => {
                 let cond =
                     if flags & FLAG_NEGATED > 0 {
-                        quote_expr!(&*cx, !self.is_word_boundary())
+                        quote_expr!(&*cx, !self.chars.is_word_boundary())
                     } else {
-                        quote_expr!(&*cx, self.is_word_boundary())
+                        quote_expr!(&*cx, self.chars.is_word_boundary())
                     };
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
@@ -654,7 +559,7 @@ fn mk_check_prefix(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
         quote_expr!(&*cx,
             if clist.size == 0 {
                 let haystack = self.input.as_bytes().slice_from(self.ic);
-                match ::regexp::program::find_prefix($bytes, haystack) {
+                match find_prefix($bytes, haystack) {
                     None => break,
                     Some(i) => {
                         self.ic += i;

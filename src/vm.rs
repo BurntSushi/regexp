@@ -69,12 +69,7 @@ pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
         start: start,
         end: end,
         ic: 0,
-        chars: CharReader {
-            input: input,
-            prev: None,
-            cur: None,
-            next: 0,
-        },
+        chars: CharReader::new(input),
     }.run()
 }
 
@@ -89,7 +84,7 @@ struct Nfa<'r, 't> {
     chars: CharReader<'t>,
 }
 
-enum StepState {
+pub enum StepState {
     StepMatchEarlyReturn,
     StepMatch,
     StepContinue,
@@ -254,7 +249,7 @@ impl<'r, 't> Nfa<'r, 't> {
             EmptyBegin(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
-                if self.is_begin()
+                if self.chars.is_begin()
                    || (multi && self.char_is(self.chars.prev, '\n')) {
                     self.add(nlist, pc + 1, groups)
                 }
@@ -262,14 +257,14 @@ impl<'r, 't> Nfa<'r, 't> {
             EmptyEnd(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
-                if self.is_end()
+                if self.chars.is_end()
                    || (multi && self.char_is(self.chars.cur, '\n')) {
                     self.add(nlist, pc + 1, groups)
                 }
             }
             EmptyWordBoundary(flags) => {
                 nlist.add(pc, groups, true);
-                if self.is_word_boundary() == !(flags & FLAG_NEGATED > 0) {
+                if self.chars.is_word_boundary() == !(flags & FLAG_NEGATED > 0) {
                     self.add(nlist, pc + 1, groups)
                 }
             }
@@ -306,25 +301,6 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    fn is_begin(&self) -> bool { self.chars.prev.is_none() }
-    fn is_end(&self) -> bool { self.chars.cur.is_none() }
-
-    fn is_word_boundary(&self) -> bool {
-        if self.is_begin() {
-            return self.is_word(self.chars.cur)
-        }
-        if self.is_end() {
-            return self.is_word(self.chars.prev)
-        }
-        (self.is_word(self.chars.cur) && !self.is_word(self.chars.prev))
-        || (self.is_word(self.chars.prev) && !self.is_word(self.chars.cur))
-    }
-
-    fn is_word(&self, c: Option<char>) -> bool {
-        let c = match c { None => return false, Some(c) => c };
-        PERLW.bsearch(|&rc| class_cmp(false, c, rc)).is_some()
-    }
-
     // FIXME: For case insensitive comparisons, it uses the uppercase
     // character and tests for equality. IIUC, this does not generalize to
     // all of Unicode. I believe we need to check the entire fold for each
@@ -350,23 +326,33 @@ impl<'r, 't> Nfa<'r, 't> {
 /// CharReader is responsible for maintaining a "previous" and a "current"
 /// character. This one-character lookahead is necessary for assertions that
 /// look one character before or after the current position.
-struct CharReader<'t> {
+pub struct CharReader<'t> {
+    pub prev: Option<char>,
+    pub cur: Option<char>,
     input: &'t str,
-    prev: Option<char>,
-    cur: Option<char>,
     next: uint,
 }
 
 impl<'t> CharReader<'t> {
+    pub fn new(input: &'t str) -> CharReader<'t> {
+        CharReader {
+            prev: None,
+            cur: None,
+            input: input,
+            next: 0,
+       }
+    }
+
     // Sets the previous and current character given any arbitrary byte
     // index (at a unicode codepoint boundary).
-    fn set(&mut self, ic: uint) -> uint {
+    #[inline(always)]
+    pub fn set(&mut self, ic: uint) -> uint {
         self.prev = None;
         self.cur = None;
         self.next = 0;
 
         if self.input.len() == 0 {
-            return 0 + 1
+            return 1
         }
         if ic > 0 {
             let i = cmp::min(ic, self.input.len());
@@ -385,7 +371,8 @@ impl<'t> CharReader<'t> {
 
     // advance does the same as set, except it always advances to the next 
     // character in the input (and therefore does half as many UTF8 decodings).
-    fn advance(&mut self) -> uint {
+    #[inline(always)]
+    pub fn advance(&mut self) -> uint {
         self.prev = self.cur;
         if self.next < self.input.len() {
             let cur = self.input.char_range_at(self.next);
@@ -396,6 +383,22 @@ impl<'t> CharReader<'t> {
             self.next = self.input.len() + 1;
         }
         self.next
+    }
+
+    #[inline(always)]
+    pub fn is_begin(&self) -> bool { self.prev.is_none() }
+    #[inline(always)]
+    pub fn is_end(&self) -> bool { self.cur.is_none() }
+
+    pub fn is_word_boundary(&self) -> bool {
+        if self.is_begin() {
+            return is_word(self.cur)
+        }
+        if self.is_end() {
+            return is_word(self.prev)
+        }
+        (is_word(self.cur) && !is_word(self.prev))
+        || (is_word(self.prev) && !is_word(self.cur))
     }
 }
 
@@ -453,16 +456,41 @@ impl Threads {
         s < self.size && self.queue.get(s).pc == pc
     }
 
+    #[inline(always)]
     fn empty(&mut self) {
         self.size = 0;
     }
 
+    #[inline(always)]
     fn pc(&self, i: uint) -> uint {
         self.queue.get(i).pc
     }
 
+    #[inline(always)]
     fn groups<'r>(&'r mut self, i: uint) -> &'r mut [Option<uint>] {
         self.queue.get_mut(i).groups.as_mut_slice()
+    }
+}
+
+/// Returns true if the character is a word character, according to the
+/// (Unicode friendly) Perl character class '\w'.
+pub fn is_word(c: Option<char>) -> bool {
+    let c = match c {
+        None => return false,
+        Some(c) => c,
+    };
+    // Try the common ASCII case before invoking binary search.
+    match c {
+        '_' | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' => true,
+        _ => PERLW.bsearch(|&(start, end)| {
+            if c >= start && c <= end {
+                Equal
+            } else if start > c {
+                Greater
+            } else {
+                Less
+            }
+        }).is_some()
     }
 }
 
@@ -501,6 +529,7 @@ fn class_cmp(casei: bool, mut textc: char,
 /// If `needle` is not in `haystack`, then `None` is returned.
 ///
 /// Note that this is using a naive substring algorithm.
+#[inline(always)]
 pub fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
     if needle.len() > haystack.len() || needle.len() == 0 {
         return None
