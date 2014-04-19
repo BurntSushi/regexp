@@ -34,9 +34,12 @@ use syntax::ext::base::{
 };
 use syntax::parse;
 use syntax::parse::token;
-use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
-
+use syntax::parse::token::{EOF, LIT_CHAR, IDENT, LIT_INT_UNSUFFIXED};
 use syntax::print::pprust;
+
+use std::u8;
+use std::u16;
+use std::u32;
 
 use regexp::Regexp;
 use regexp::native::{
@@ -92,8 +95,18 @@ fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         Native(_) => unreachable!(),
     };
 
+    let num_insts = prog.insts.len() as u64;
+    let pctype = 
+        if num_insts <= u8::MAX as u64 {
+            quote_ty!(&*cx, u8)
+        } else if num_insts <= u16::MAX as u64 {
+            quote_ty!(&*cx, u16)
+        } else if num_insts <= u32::MAX as u64 {
+            quote_ty!(&*cx, u32)
+        } else {
+            quote_ty!(&*cx, u64)
+        };
     let num_cap_locs = 2 * prog.num_captures();
-    let num_insts = prog.insts.len();
     let cap_names = as_expr_vec(cx, sp, re.names,
         |cx, _, name| match name {
             &Some(ref name) => {
@@ -110,7 +123,9 @@ fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         };
     let init_groups = vec_from_fn(cx, sp, num_cap_locs,
                                   |cx| quote_expr!(&*cx, None));
-    let check_prefix = mk_check_prefix(cx, sp, prog);
+    let prefix_bytes = as_expr_vec(cx, sp, prog.prefix.as_slice().as_bytes(),
+                                   |cx, _, b| quote_expr!(&*cx, $b));
+    let check_prefix = mk_check_prefix(cx, prog);
     let step_insts = mk_step_insts(cx, sp, prog);
     let add_insts = mk_add_insts(cx, sp, prog);
     let expr = quote_expr!(&*cx, {
@@ -140,8 +155,10 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     }
 
     impl<'t> Nfa<'t> {
+        #[allow(unused_variable)]
         fn run(&mut self, start: uint, end: uint) -> ~[Option<uint>] {
             let mut matched = false;
+            let prefix_bytes: &[u8] = &$prefix_bytes;
             let mut clist = &mut Threads::new(self.which);
             let mut nlist = &mut Threads::new(self.which);
 
@@ -190,12 +207,12 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         #[allow(unused_variable)]
         #[inline(always)]
         fn step(&self, groups: &mut Captures, nlist: &mut Threads,
-                caps: &mut Captures, pc: uint) -> StepState {
+                caps: &mut Captures, pc: $pctype) -> StepState {
             $step_insts
             StepContinue
         }
 
-        fn add(&self, nlist: &mut Threads, pc: uint,
+        fn add(&self, nlist: &mut Threads, pc: $pctype,
                groups: &mut Captures) {
             if nlist.contains(pc) {
                 return
@@ -205,15 +222,15 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     }
 
     struct Thread {
-        pc: uint,
+        pc: $pctype,
         groups: Captures,
     }
 
     struct Threads {
         which: MatchKind,
         queue: [Thread, ..$num_insts],
-        sparse: [uint, ..$num_insts],
-        size: uint,
+        sparse: [$pctype, ..$num_insts],
+        size: $pctype,
     }
 
     impl Threads {
@@ -227,8 +244,8 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         }
 
         #[inline(always)]
-        fn add(&mut self, pc: uint, groups: &Captures) {
-            let t = &mut self.queue[self.size];
+        fn add(&mut self, pc: $pctype, groups: &Captures) {
+            let t = &mut self.queue[self.size as uint];
             t.pc = pc;
             match self.which {
                 Exists => {},
@@ -240,21 +257,21 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     unsafe { t.groups.copy_memory(groups.as_slice()) }
                 }
             }
-            self.sparse[pc] = self.size;
+            self.sparse[pc as uint] = self.size;
             self.size += 1;
         }
 
         #[inline(always)]
-        fn add_empty(&mut self, pc: uint) {
-            self.queue[self.size].pc = pc;
-            self.sparse[pc] = self.size;
+        fn add_empty(&mut self, pc: $pctype) {
+            self.queue[self.size as uint].pc = pc;
+            self.sparse[pc as uint] = self.size;
             self.size += 1;
         }
 
         #[inline(always)]
-        fn contains(&self, pc: uint) -> bool {
-            let s = self.sparse[pc];
-            s < self.size && self.queue[s].pc == pc
+        fn contains(&self, pc: $pctype) -> bool {
+            let s = self.sparse[pc as uint];
+            s < self.size && self.queue[s as uint].pc == pc
         }
 
         #[inline(always)]
@@ -263,13 +280,13 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         }
 
         #[inline(always)]
-        fn pc(&self, i: uint) -> uint {
-            self.queue[i].pc
+        fn pc(&self, i: $pctype) -> $pctype {
+            self.queue[i as uint].pc
         }
 
         #[inline(always)]
-        fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
-            &'r mut self.queue[i].groups
+        fn groups<'r>(&'r mut self, i: $pctype) -> &'r mut Captures {
+            &'r mut self.queue[i as uint].groups
         }
     }
 }
@@ -303,17 +320,27 @@ impl ToTokens for bool {
     }
 }
 
+struct UntypedNum(uint);
+
+impl ToTokens for UntypedNum {
+    fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
+        let UntypedNum(n) = *self;
+        vec!(TTTok(DUMMY_SP, LIT_INT_UNSUFFIXED(n as i64)))
+    }
+}
+
 fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @Expr {
     let mat_pc = quote_expr!(&*cx, pc);
     as_expr(sp, ast::ExprMatch(mat_pc, arms))
 }
 
 fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @Expr) -> ast::Arm {
+    let curpc = UntypedNum(pc);
     ast::Arm {
         pats: vec!(@ast::Pat{
             id: DUMMY_NODE_ID,
             span: sp,
-            node: ast::PatLit(quote_expr!(&*cx, $pc)),
+            node: ast::PatLit(quote_expr!(&*cx, $curpc)),
         }),
         guard: None,
         body: body,
@@ -360,7 +387,7 @@ fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
 
 fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
-        let nextpc = pc + 1;
+        let nextpc = UntypedNum(pc + 1);
         let body = match *inst {
             Match => {
                 quote_expr!(&*cx, {
@@ -449,7 +476,8 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
 
 fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
-        let nextpc = pc + 1;
+        let curpc = UntypedNum(pc);
+        let nextpc = UntypedNum(pc + 1);
         let body = match *inst {
             EmptyBegin(flags) => {
                 let nl = '\n';
@@ -462,7 +490,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                         quote_expr!(&*cx, self.chars.is_begin())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
+                    nlist.add_empty($curpc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -477,7 +505,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                         quote_expr!(&*cx, self.chars.is_end())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
+                    nlist.add_empty($curpc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -489,7 +517,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                         quote_expr!(&*cx, self.chars.is_word_boundary())
                     };
                 quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
+                    nlist.add_empty($curpc);
                     if $cond { self.add(nlist, $nextpc, groups) }
                 })
             }
@@ -499,7 +527,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                 // right over it every time.
                 if slot > 1 {
                     quote_expr!(&*cx, {
-                        nlist.add_empty($pc);
+                        nlist.add_empty($curpc);
                         match self.which {
                             Submatches => {
                                 let old = groups[$slot];
@@ -512,7 +540,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                     })
                 } else {
                     quote_expr!(&*cx, {
-                        nlist.add_empty($pc);
+                        nlist.add_empty($curpc);
                         match self.which {
                             Submatches | Location => {
                                 let old = groups[$slot];
@@ -526,20 +554,22 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
                 }
             }
             Jump(to) => {
+                let to = UntypedNum(to);
                 quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
+                    nlist.add_empty($curpc);
                     self.add(nlist, $to, groups);
                 })
             }
             Split(x, y) => {
+                let (x, y) = (UntypedNum(x), UntypedNum(y));
                 quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
+                    nlist.add_empty($curpc);
                     self.add(nlist, $x, groups);
                     self.add(nlist, $y, groups);
                 })
             }
             // For Match, OneChar, CharClass, Any
-            _ => quote_expr!(&*cx, nlist.add($pc, groups)),
+            _ => quote_expr!(&*cx, nlist.add($curpc, groups)),
         };
         mk_inst_arm(cx, sp, pc, body)
     }).collect::<Vec<ast::Arm>>();
@@ -550,16 +580,14 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     m
 }
 
-fn mk_check_prefix(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
+fn mk_check_prefix(cx: &mut ExtCtxt, re: &Program) -> @Expr {
     if re.prefix.len() == 0 {
         quote_expr!(&*cx, {})
     } else {
-        let bytes = as_expr_vec(cx, sp, re.prefix.as_slice().as_bytes(),
-                                |cx, _, b| quote_expr!(&*cx, $b));
         quote_expr!(&*cx,
             if clist.size == 0 {
                 let haystack = self.input.as_bytes().slice_from(self.ic);
-                match find_prefix($bytes, haystack) {
+                match find_prefix(prefix_bytes, haystack) {
                     None => break,
                     Some(i) => {
                         self.ic += i;

@@ -132,7 +132,6 @@ impl<'r, 't> Nfa<'r, 't> {
                     let needle = self.prog.prefix.as_slice().as_bytes();
                     let haystack = self.input.as_bytes().slice_from(self.ic);
                     match find_prefix(needle, haystack) {
-                        // None => return Vec::from_elem(ncaps * 2, None), 
                         None => break,
                         Some(i) => {
                             self.ic += i;
