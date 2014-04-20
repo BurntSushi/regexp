@@ -29,7 +29,7 @@ use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
 use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
 use syntax::codemap::{Span, DUMMY_SP};
 use syntax::ext::base::{
-    SyntaxExtension, ExtCtxt, MacResult, MRExpr,
+    SyntaxExtension, ExtCtxt, MacResult, MacExpr, DummyResult,
     NormalTT, BasicMacroExpander,
 };
 use syntax::parse;
@@ -74,16 +74,16 @@ pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
 /// isn't completely thorough at the moment), and translating character class
 /// matching from using a binary search to a simple `match` expression (see
 /// `mk_match_class`).
-fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
+fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> ~MacResult {
     let regex = match parse(cx, tts) {
         Some(r) => r,
-        None => return MacResult::dummy_expr(sp),
+        None => return DummyResult::any(sp),
     };
     let re = match Regexp::new(regex.to_owned()) {
         Ok(re) => re,
         Err(err) => {
             cx.span_err(sp, err.to_str());
-            return MacResult::dummy_expr(sp)
+            return DummyResult::any(sp)
         }
     };
     let prog = match re.p {
@@ -282,7 +282,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     p: ::regexp::native::Native(exec),
 }
     });
-    MRExpr(expr)
+    MacExpr::new(expr)
 }
 
 // This trait is defined in the quote module in the syntax crate, but I
