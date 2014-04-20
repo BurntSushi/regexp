@@ -1,3 +1,5 @@
+RUSTC ?= rustc
+
 bench-rust: run-rust big.fasta
 	time ./run-rust < big.fasta
 
@@ -17,11 +19,11 @@ big.fasta: generator
 	./generator 5000000 > big.fasta
 
 generator: shootout-fasta.rs
-	rustc --opt-level=3 shootout-fasta.rs -o generator
+	$(RUSTC) --opt-level=3 shootout-fasta.rs -o generator
 
 run-rust: regex-dna.rs
-	(cd ../.. && make)
-	rustc --opt-level=3 -Z lto -g -L ../../build regex-dna.rs -o run-rust
+	(cd ../.. && make RUSTC=$(RUSTC))
+	$(RUSTC) --opt-level=3 -Z lto -g -L ../../build regex-dna.rs -o run-rust
 
 run-golang: regex-dna.go
 	go build -o run-golang regex-dna.go
