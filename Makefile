@@ -2,7 +2,7 @@ RUSTC ?= rustc
 RUSTDOC ?= rustdoc
 BUILD_DIR ?= ./build/
 RUST_PATH ?= $(BUILD_DIR)
-RUSTFLAGS ?= --opt-level=3 -g
+RUSTFLAGS ?= --opt-level=3
 RUSTTESTFLAGS ?= 
 REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
 REGEXP_LIB_FILES = src/compile.rs src/lib.rs src/parse.rs src/re.rs \
