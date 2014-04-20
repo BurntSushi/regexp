@@ -28,7 +28,8 @@ use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
 use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
 use syntax::codemap::{Span, DUMMY_SP};
 use syntax::ext::base::{
-    SyntaxExtension, ExtCtxt, MacResult, MRExpr, NormalTT, BasicMacroExpander,
+    SyntaxExtension, ExtCtxt, MacResult, MacExpr, DummyResult,
+    NormalTT, BasicMacroExpander,
 };
 use syntax::parse;
 use syntax::parse::token;
@@ -52,16 +53,16 @@ pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
         None));
 }
 
-fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
+fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> ~MacResult {
     let restr = match parse_one_str_lit(cx, tts) {
         Some(re) => re,
-        None => return MacResult::dummy_expr(sp),
+        None => return DummyResult::any(sp),
     };
     let re = match Regexp::new(restr.to_owned()) {
         Ok(re) => re,
         Err(err) => {
             cx.span_err(sp, err.to_str());
-            return MacResult::dummy_expr(sp)
+            return DummyResult::any(sp)
         }
     };
 
@@ -77,7 +78,7 @@ fn re_static(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> MacResult {
         }
     );
     let prefix = re.p.prefix.as_slice();
-    MRExpr(quote_expr!(&*cx,
+    MacExpr::new(quote_expr!(&*cx,
         ::regexp::Regexp {
             p: ::regexp::program::Program {
                 regex: ::std::str::Slice($restr),
