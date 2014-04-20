@@ -25,8 +25,6 @@ extern crate regexp;
 extern crate syntax;
 
 use syntax::ast;
-use syntax::ast::{Name, TokenTree, TTTok, DUMMY_NODE_ID};
-use syntax::ast::{Expr, Expr_, ExprLit, LitStr, ExprVec};
 use syntax::codemap::{Span, DUMMY_SP};
 use syntax::ext::base::{
     SyntaxExtension, ExtCtxt, MacResult, MacExpr, DummyResult,
@@ -47,7 +45,7 @@ use regexp::native::{
 
 /// For the `regexp!` syntax extension. Do not use.
 #[macro_registrar]
-pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
+pub fn macro_registrar(reg: |ast::Name, SyntaxExtension|) {
     reg(token::intern("regexp"),
         NormalTT(~BasicMacroExpander {
             expander: native,
@@ -74,7 +72,7 @@ pub fn macro_registrar(reg: |Name, SyntaxExtension|) {
 /// isn't completely thorough at the moment), and translating character class
 /// matching from using a binary search to a simple `match` expression (see
 /// `mk_match_class`).
-fn native(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> ~MacResult {
+fn native(cx: &mut ExtCtxt, sp: Span, tts: &[ast::TokenTree]) -> ~MacResult {
     let regex = match parse(cx, tts) {
         Some(r) => r,
         None => return DummyResult::any(sp),
@@ -291,30 +289,30 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
 // defined rather than satisfying a particular trait.
 #[doc(hidden)]
 trait ToTokens {
-    fn to_tokens(&self, cx: &ExtCtxt) -> Vec<TokenTree>;
+    fn to_tokens(&self, cx: &ExtCtxt) -> Vec<ast::TokenTree>;
 }
 
 impl ToTokens for char {
-    fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
-        vec!(TTTok(DUMMY_SP, LIT_CHAR((*self) as u32)))
+    fn to_tokens(&self, _: &ExtCtxt) -> Vec<ast::TokenTree> {
+        vec!(ast::TTTok(DUMMY_SP, LIT_CHAR((*self) as u32)))
     }
 }
 
 impl ToTokens for bool {
-    fn to_tokens(&self, _: &ExtCtxt) -> Vec<TokenTree> {
-        vec!(TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
+    fn to_tokens(&self, _: &ExtCtxt) -> Vec<ast::TokenTree> {
+        vec!(ast::TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
     }
 }
 
-fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @Expr {
+fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @ast::Expr {
     let mat_pc = quote_expr!(&*cx, pc);
     as_expr(sp, ast::ExprMatch(mat_pc, arms))
 }
 
-fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @Expr) -> ast::Arm {
+fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @ast::Expr) -> ast::Arm {
     ast::Arm {
         pats: vec!(@ast::Pat{
-            id: DUMMY_NODE_ID,
+            id: ast::DUMMY_NODE_ID,
             span: sp,
             node: ast::PatLit(quote_expr!(&*cx, $pc)),
         }),
@@ -323,10 +321,10 @@ fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @Expr) -> ast::Arm {
     }
 }
 
-fn mk_any_arm(sp: Span, e: @Expr) -> ast::Arm {
+fn mk_any_arm(sp: Span, e: @ast::Expr) -> ast::Arm {
     ast::Arm {
         pats: vec!(@ast::Pat{
-            id: DUMMY_NODE_ID,
+            id: ast::DUMMY_NODE_ID,
             span: sp,
             node: ast::PatWild,
         }),
@@ -336,7 +334,7 @@ fn mk_any_arm(sp: Span, e: @Expr) -> ast::Arm {
 }
 
 fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
-                  casei: bool, ranges: &[(char, char)]) -> @Expr {
+                  casei: bool, ranges: &[(char, char)]) -> @ast::Expr {
     let mut arms = ranges.iter().map(|&(mut start, mut end)| {
         if casei {
             start = start.to_uppercase();
@@ -344,7 +342,7 @@ fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
         }
         ast::Arm {
             pats: vec!(@ast::Pat{
-                id: DUMMY_NODE_ID,
+                id: ast::DUMMY_NODE_ID,
                 span: sp,
                 node: ast::PatRange(quote_expr!(&*cx, $start),
                                     quote_expr!(&*cx, $end)),
@@ -361,7 +359,7 @@ fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
     as_expr(sp, ast::ExprMatch(match_on, arms))
 }
 
-fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
+fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
         let nextpc = pc + 1;
         let body = match *inst {
@@ -450,7 +448,7 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     m
 }
 
-fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
+fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
         let nextpc = pc + 1;
         let body = match *inst {
@@ -553,7 +551,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @Expr {
     m
 }
 
-fn mk_check_prefix(cx: &mut ExtCtxt, re: &Program) -> @Expr {
+fn mk_check_prefix(cx: &mut ExtCtxt, re: &Program) -> @ast::Expr {
     if re.prefix.len() == 0 {
         quote_expr!(&*cx, {})
     } else {
@@ -573,38 +571,38 @@ fn mk_check_prefix(cx: &mut ExtCtxt, re: &Program) -> @Expr {
 }
 
 fn vec_from_fn(cx: &mut ExtCtxt, sp: Span, len: uint,
-               to_expr: |&mut ExtCtxt| -> @Expr) -> @Expr {
+               to_expr: |&mut ExtCtxt| -> @ast::Expr) -> @ast::Expr {
     as_expr_vec(cx, sp, Vec::from_elem(len, ()).as_slice(),
                 |cx, _, _| to_expr(cx))
 }
 
 fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
-                  to_expr: |&mut ExtCtxt, Span, &T| -> @Expr) -> @Expr {
+                  to_expr: |&mut ExtCtxt, Span, &T| -> @ast::Expr) -> @ast::Expr {
     let mut exprs = vec!();
     // xs.iter() doesn't work here for some reason. No idea why.
     for i in ::std::iter::range(0, xs.len()) {
         exprs.push(to_expr(&mut *cx, sp, &xs[i]))
     }
-    let vec_exprs = as_expr(sp, ExprVec(exprs));
+    let vec_exprs = as_expr(sp, ast::ExprVec(exprs));
     quote_expr!(&*cx, $vec_exprs)
 }
 
-fn as_expr(sp: Span, e: Expr_) -> @Expr {
-    @Expr {
-        id: DUMMY_NODE_ID,
+fn as_expr(sp: Span, e: ast::Expr_) -> @ast::Expr {
+    @ast::Expr {
+        id: ast::DUMMY_NODE_ID,
         node: e,
         span: sp,
     }
 }
 
-fn parse(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<~str> {
+fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<~str> {
     let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
                                                 Vec::from_slice(tts));
     let entry = parser.parse_expr();
     let regex = match entry.node {
-        ExprLit(lit) => {
+        ast::ExprLit(lit) => {
             match lit.node {
-                LitStr(ref s, _) => s.to_str(),
+                ast::LitStr(ref s, _) => s.to_str(),
                 _ => {
                     cx.span_err(entry.span, format!(
                         "expected string literal but got `{}`",
