@@ -53,7 +53,7 @@ test: build/tests
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/tests
 
 build/tests: $(REGEXP_LIB) $(REGEXP_MACRO_LIB) $(REGEXP_TEST_FILES)
-	rustc $(RUSTTESTFLAGS) -L $(RUST_PATH) --test $(REGEXP_DYN_FLAGS) src/lib.rs -o ./build/tests
+	$(RUSTC) $(RUSTTESTFLAGS) -L $(RUST_PATH) --test $(REGEXP_DYN_FLAGS) src/lib.rs -o ./build/tests
 
 bench: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/bench --bench
@@ -62,13 +62,13 @@ bench-perf: build/bench
 	RUST_TEST_TASKS=1 RUST_LOG=regexp perf record -g --call-graph dwarf -s ./build/bench --bench
 
 build/bench: $(REGEXP_LIB) $(REGEXP_MACRO_LIB) $(REGEXP_TEST_FILES)
-	rustc $(RUSTFLAGS) -Z lto -L $(RUST_PATH) --test --cfg bench $(REGEXP_DYN_FLAGS) src/lib.rs -o ./build/bench
+	$(RUSTC) $(RUSTFLAGS) -g -Z lto -L $(RUST_PATH) --test --cfg bench $(REGEXP_DYN_FLAGS) src/lib.rs -o ./build/bench
 
 scratch: build/scratch
 	RUST_TEST_TASKS=1 RUST_LOG=regexp ./build/scratch
 
 build/scratch: $(REGEXP_MACRO_LIB) scratch.rs
-	rustc -L $(BUILD_DIR) $(RUSTTESTFLAGS) scratch.rs -o ./build/scratch
+	$(RUSTC) -L $(BUILD_DIR) $(RUSTTESTFLAGS) scratch.rs -o ./build/scratch
 
 ctags:
 	ctags --recurse --options=ctags.rust --languages=Rust
