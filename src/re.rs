@@ -354,11 +354,11 @@ impl Regexp {
             i += 1;
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
-            new.push_str(unsafe { raw::slice_unchecked(text, last_match, s) });
+            new.push_str(unsafe { raw::slice_bytes(text, last_match, s) });
             new.push_str(rep.reg_replace(&cap));
             last_match = e;
         }
-        new.push_str(unsafe { raw::slice_unchecked(text, last_match, text.len()) });
+        new.push_str(unsafe { raw::slice_bytes(text, last_match, text.len()) });
         new.into_owned()
     }
 }
