@@ -470,7 +470,6 @@ pub struct Captures<'t> {
     text: &'t str,
     locs: CaptureLocs,
     named: Option<HashMap<~str, uint>>,
-    offset: uint,
 }
 
 impl<'t> Captures<'t> {
@@ -499,7 +498,6 @@ impl<'t> Captures<'t> {
             text: search,
             locs: locs,
             named: named,
-            offset: 0,
         })
     }
 
