@@ -530,19 +530,22 @@ fn class_cmp(casei: bool, mut textc: char,
 /// Note that this is using a naive substring algorithm.
 #[inline(always)]
 pub fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
-    if needle.len() > haystack.len() || needle.len() == 0 {
+    let (hlen, nlen) = (haystack.len(), needle.len());
+    if nlen > hlen || nlen == 0 {
         return None
     }
     let mut hayi = 0u;
     'HAYSTACK: loop {
-        if hayi > haystack.len() - needle.len() {
+        if hayi > hlen - nlen {
             break
         }
-        for nedi in ::std::iter::range(0, needle.len()) {
+        let mut nedi = 0;
+        while nedi < nlen {
             if haystack[hayi+nedi] != needle[nedi] {
                 hayi += 1;
                 continue 'HAYSTACK
             }
+            nedi += 1;
         }
         return Some(hayi)
     }
