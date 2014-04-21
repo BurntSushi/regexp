@@ -9,8 +9,15 @@
 // except according to those terms.
 
 use collections::HashMap;
+use std::cast;
 use std::from_str::from_str;
+use std::str::{MaybeOwned, Owned, Slice};
 use std::str::raw;
+
+use std::mem;
+use std::ptr;
+use std::rt::global_heap::malloc_raw;
+use RawVec = std::raw::Vec;
 
 use super::compile::Program;
 use super::parse::{parse, Error};
@@ -355,11 +362,32 @@ impl Regexp {
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
             new.push_str(unsafe { raw::slice_bytes(text, last_match, s) });
-            new.push_str(rep.reg_replace(&cap));
+            new.push_str(rep.reg_replace(&cap).as_slice());
             last_match = e;
         }
         new.push_str(unsafe { raw::slice_bytes(text, last_match, text.len()) });
-        new.into_owned()
+
+        // The lengths we will go to avoid allocation.
+        // This has a *dramatic* affect on the regex-dna benchmark (and indeed,
+        // any code that uses 'replace' on a large corpus of text multiple
+        // times). The trick is to avoid the obscene amount of allocation
+        // currently done in slice::from_iter. I've been promised that DST will
+        // fix this.
+        //
+        // The following is based on the code in slice::from_iter, but
+        // shortened since we know we're dealing with bytes.
+        let mut xs = new.into_bytes();
+        let size = mem::size_of::<RawVec<()>>().checked_add(&xs.len());
+        let size = size.expect("overflow in replacen()");
+        unsafe {
+            let ret = malloc_raw(size) as *mut RawVec<()>;
+            (*ret).fill = xs.len();
+            (*ret).alloc = xs.len();
+            ptr::copy_nonoverlapping_memory(
+                &mut (*ret).data as *mut _ as *mut u8, xs.as_ptr(), xs.len());
+            xs.set_len(0);
+            cast::transmute(ret)
+        }
     }
 }
 
@@ -374,25 +402,25 @@ pub struct NoExpand<'t>(pub &'t str);
 
 /// Replacer describes types that can be used to replace matches in a string.
 pub trait Replacer {
-    fn reg_replace(&self, caps: &Captures) -> ~str;
+    fn reg_replace<'a>(&'a self, caps: &Captures) -> MaybeOwned<'a>;
 }
 
 impl<'t> Replacer for NoExpand<'t> {
-    fn reg_replace(&self, _: &Captures) -> ~str {
+    fn reg_replace<'a>(&'a self, _: &Captures) -> MaybeOwned<'a> {
         let NoExpand(s) = *self;
-        s.into_owned()
+        Slice(s)
     }
 }
 
 impl<'t> Replacer for &'t str {
-    fn reg_replace(&self, caps: &Captures) -> ~str {
-        caps.expand(*self)
+    fn reg_replace<'a>(&'a self, caps: &Captures) -> MaybeOwned<'a> {
+        Owned(caps.expand(*self))
     }
 }
 
 impl<'a> Replacer for |&Captures|: 'a -> ~str {
-    fn reg_replace(&self, caps: &Captures) -> ~str {
-        (*self)(caps)
+    fn reg_replace<'r>(&'r self, caps: &Captures) -> MaybeOwned<'r> {
+        Owned((*self)(caps))
     }
 }
 
