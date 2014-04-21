@@ -192,7 +192,6 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                             v.as_mut_ptr(), groups.as_ptr(), elts);
                     }
                     v
-                    // ::std::slice::raw::from_buf_raw(groups.as_ptr(), groups.len()) 
                 }
             }
         }
