@@ -184,6 +184,8 @@ struct Parser<'a> {
     // Incremented each time an opening left paren is seen (assuming it is
     // opening a capture group).
     caps: uint,
+    // A set of all capture group names used only to detect duplicates.
+    names: Vec<~str>,
 }
 
 pub fn parse(s: &str) -> Result<~Ast, Error> {
@@ -193,6 +195,7 @@ pub fn parse(s: &str) -> Result<~Ast, Error> {
         stack: vec!(),
         flags: FLAG_EMPTY,
         caps: 0,
+        names: vec!(),
     }.parse()
 }
 
@@ -716,6 +719,10 @@ impl<'a> Parser<'a> {
             return self.err(
                 "Capture names can only have underscores, letters and digits.")
         }
+        if self.names.contains(&name) {
+            return self.err(format!("Duplicate capture group name '{}'.", name))
+        }
+        self.names.push(name.clone());
         self.chari = closer;
         self.caps += 1;
         self.stack.push(Paren(self.flags, self.caps, name));

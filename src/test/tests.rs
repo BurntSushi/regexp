@@ -96,6 +96,7 @@ noparse!(fail_flag_empty, "(?)")
 noparse!(fail_double_neg, "(?-i-i)")
 noparse!(fail_neg_empty, "(?i-)")
 noparse!(fail_empty_group, "()")
+noparse!(fail_dupe_named, "(?P<a>.)(?P<a>.)")
 
 macro_rules! mat(
     ($name:ident, $re:expr, $text:expr, $($loc:tt)+) => (
