@@ -404,6 +404,11 @@ pub struct NoExpand<'t>(pub &'t str);
 
 /// Replacer describes types that can be used to replace matches in a string.
 pub trait Replacer {
+    /// Returns a possibly owned string that is used to replace the match
+    /// corresponding the the `caps` capture group.
+    ///
+    /// The `'a` lifetime refers to the lifetime of a borrowed string when
+    /// a new owned string isn't needed (e.g., for `NoExpand`).
     fn reg_replace<'a>(&'a self, caps: &Captures) -> MaybeOwned<'a>;
 }
 
