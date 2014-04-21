@@ -42,7 +42,7 @@ use super::compile::{
 use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
 use super::parse::unicode::PERLW;
 
-pub type CaptureLocs = ~[Option<uint>];
+pub type CaptureLocs = Vec<Option<uint>>;
 
 pub enum MatchKind {
     Exists,
@@ -160,7 +160,7 @@ impl<'r, 't> Nfa<'r, 't> {
                 let step_state = self.step(groups.as_mut_slice(), nlist,
                                            clist.groups(i), pc);
                 match step_state {
-                    StepMatchEarlyReturn => return ~[Some(0), Some(0)],
+                    StepMatchEarlyReturn => return vec![Some(0), Some(0)],
                     StepMatch => { matched = true; clist.empty() },
                     StepContinue => {},
                 }
@@ -170,9 +170,9 @@ impl<'r, 't> Nfa<'r, 't> {
             nlist.empty();
         }
         match self.which {
-            Exists if matched     => ~[Some(0), Some(0)],
-            Exists                => ~[None, None],
-            Location | Submatches => groups.as_slice().into_owned(),
+            Exists if matched     => vec![Some(0), Some(0)],
+            Exists                => vec![None, None],
+            Location | Submatches => groups,
         }
     }
 

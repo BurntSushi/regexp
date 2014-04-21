@@ -114,7 +114,7 @@ fn native(cx: &mut ExtCtxt, sp: Span, tts: &[ast::TokenTree]) -> ~MacResult {
     let add_insts = mk_add_insts(cx, sp, prog);
     let expr = quote_expr!(&*cx, {
 fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
-            start: uint, end: uint) -> ~[Option<uint>] {
+            start: uint, end: uint) -> Vec<Option<uint>> {
     #![allow(unused_imports)]
     use regexp::native::{
         MatchKind, Exists, Location, Submatches,
@@ -140,7 +140,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
 
     impl<'t> Nfa<'t> {
         #[allow(unused_variable)]
-        fn run(&mut self, start: uint, end: uint) -> ~[Option<uint>] {
+        fn run(&mut self, start: uint, end: uint) -> Vec<Option<uint>> {
             let mut matched = false;
             let prefix_bytes: &[u8] = &$prefix_bytes;
             let mut clist = &mut Threads::new(self.which);
@@ -171,7 +171,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                                                clist.groups(i), pc);
                     match step_state {
                         StepMatchEarlyReturn =>
-                            return [Some(0u), Some(0u)].into_owned(),
+                            return vec![Some(0u), Some(0u)],
                         StepMatch => { matched = true; clist.empty() },
                         StepContinue => {},
                     }
@@ -181,9 +181,19 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                 nlist.empty();
             }
             match self.which {
-                Exists if matched     => ~[Some(0u), Some(0u)],
-                Exists                => ~[None, None],
-                Location | Submatches => groups.into_owned(),
+                Exists if matched     => vec![Some(0u), Some(0u)],
+                Exists                => vec![None, None],
+                Location | Submatches => {
+                    let elts = groups.len();
+                    let mut v = Vec::with_capacity(elts);
+                    unsafe {
+                        v.set_len(elts);
+                        ::std::ptr::copy_nonoverlapping_memory(
+                            v.as_mut_ptr(), groups.as_ptr(), elts);
+                    }
+                    v
+                    // ::std::slice::raw::from_buf_raw(groups.as_ptr(), groups.len()) 
+                }
             }
         }
 
