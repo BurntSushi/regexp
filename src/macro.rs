@@ -25,14 +25,13 @@ extern crate regexp;
 extern crate syntax;
 
 use syntax::ast;
-use syntax::codemap::{Span, DUMMY_SP};
+use syntax::codemap;
 use syntax::ext::base::{
     SyntaxExtension, ExtCtxt, MacResult, MacExpr, DummyResult,
     NormalTT, BasicMacroExpander,
 };
 use syntax::parse;
 use syntax::parse::token;
-use syntax::parse::token::{EOF, LIT_CHAR, IDENT};
 use syntax::print::pprust;
 
 use regexp::Regexp;
@@ -45,13 +44,9 @@ use regexp::native::{
 
 /// For the `regexp!` syntax extension. Do not use.
 #[macro_registrar]
-pub fn macro_registrar(reg: |ast::Name, SyntaxExtension|) {
-    reg(token::intern("regexp"),
-        NormalTT(~BasicMacroExpander {
-            expander: native,
-            span: None,
-        },
-        None));
+pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
+    let expander = ~BasicMacroExpander { expander: native, span: None };
+    register(token::intern("regexp"), NormalTT(expander, None))
 }
 
 /// Generates specialized code for the Pike VM for a particular regular
@@ -72,7 +67,8 @@ pub fn macro_registrar(reg: |ast::Name, SyntaxExtension|) {
 /// isn't completely thorough at the moment), and translating character class
 /// matching from using a binary search to a simple `match` expression (see
 /// `mk_match_class`).
-fn native(cx: &mut ExtCtxt, sp: Span, tts: &[ast::TokenTree]) -> ~MacResult {
+fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
+         -> ~MacResult {
     let regex = match parse(cx, tts) {
         Some(r) => r,
         None => return DummyResult::any(sp),
@@ -303,22 +299,25 @@ trait ToTokens {
 
 impl ToTokens for char {
     fn to_tokens(&self, _: &ExtCtxt) -> Vec<ast::TokenTree> {
-        vec!(ast::TTTok(DUMMY_SP, LIT_CHAR((*self) as u32)))
+        vec!(ast::TTTok(codemap::DUMMY_SP, token::LIT_CHAR((*self) as u32)))
     }
 }
 
 impl ToTokens for bool {
     fn to_tokens(&self, _: &ExtCtxt) -> Vec<ast::TokenTree> {
-        vec!(ast::TTTok(DUMMY_SP, IDENT(token::str_to_ident(self.to_str()), false)))
+        let ident = token::IDENT(token::str_to_ident(self.to_str()), false);
+        vec!(ast::TTTok(codemap::DUMMY_SP, ident))
     }
 }
 
-fn mk_match_insts(cx: &mut ExtCtxt, sp: Span, arms: Vec<ast::Arm>) -> @ast::Expr {
+fn mk_match_insts(cx: &mut ExtCtxt, sp: codemap::Span, arms: Vec<ast::Arm>)
+                 -> @ast::Expr {
     let mat_pc = quote_expr!(&*cx, pc);
     as_expr(sp, ast::ExprMatch(mat_pc, arms))
 }
 
-fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @ast::Expr) -> ast::Arm {
+fn mk_inst_arm(cx: &mut ExtCtxt, sp: codemap::Span, pc: uint, body: @ast::Expr)
+              -> ast::Arm {
     ast::Arm {
         pats: vec!(@ast::Pat{
             id: ast::DUMMY_NODE_ID,
@@ -330,7 +329,7 @@ fn mk_inst_arm(cx: &mut ExtCtxt, sp: Span, pc: uint, body: @ast::Expr) -> ast::A
     }
 }
 
-fn mk_any_arm(sp: Span, e: @ast::Expr) -> ast::Arm {
+fn mk_any_arm(sp: codemap::Span, e: @ast::Expr) -> ast::Arm {
     ast::Arm {
         pats: vec!(@ast::Pat{
             id: ast::DUMMY_NODE_ID,
@@ -342,7 +341,7 @@ fn mk_any_arm(sp: Span, e: @ast::Expr) -> ast::Arm {
     }
 }
 
-fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
+fn mk_match_class(cx: &mut ExtCtxt, sp: codemap::Span,
                   casei: bool, ranges: &[(char, char)]) -> @ast::Expr {
     let mut arms = ranges.iter().map(|&(mut start, mut end)| {
         if casei {
@@ -368,7 +367,8 @@ fn mk_match_class(cx: &mut ExtCtxt, sp: Span,
     as_expr(sp, ast::ExprMatch(match_on, arms))
 }
 
-fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
+fn mk_step_insts(cx: &mut ExtCtxt, sp: codemap::Span, re: &Program)
+                -> @ast::Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
         let nextpc = pc + 1;
         let body = match *inst {
@@ -457,7 +457,8 @@ fn mk_step_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
     m
 }
 
-fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
+fn mk_add_insts(cx: &mut ExtCtxt, sp: codemap::Span, re: &Program)
+               -> @ast::Expr {
     let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
         let nextpc = pc + 1;
         let body = match *inst {
@@ -579,14 +580,15 @@ fn mk_check_prefix(cx: &mut ExtCtxt, re: &Program) -> @ast::Expr {
     }
 }
 
-fn vec_from_fn(cx: &mut ExtCtxt, sp: Span, len: uint,
+fn vec_from_fn(cx: &mut ExtCtxt, sp: codemap::Span, len: uint,
                to_expr: |&mut ExtCtxt| -> @ast::Expr) -> @ast::Expr {
     as_expr_vec(cx, sp, Vec::from_elem(len, ()).as_slice(),
                 |cx, _, _| to_expr(cx))
 }
 
-fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
-                  to_expr: |&mut ExtCtxt, Span, &T| -> @ast::Expr) -> @ast::Expr {
+fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: codemap::Span, xs: &[T],
+                  to_expr: |&mut ExtCtxt, codemap::Span, &T| -> @ast::Expr)
+                 -> @ast::Expr {
     let mut exprs = vec!();
     // xs.iter() doesn't work here for some reason. No idea why.
     for i in ::std::iter::range(0, xs.len()) {
@@ -596,7 +598,7 @@ fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: Span, xs: &[T],
     quote_expr!(&*cx, $vec_exprs)
 }
 
-fn as_expr(sp: Span, e: ast::Expr_) -> @ast::Expr {
+fn as_expr(sp: codemap::Span, e: ast::Expr_) -> @ast::Expr {
     @ast::Expr {
         id: ast::DUMMY_NODE_ID,
         node: e,
@@ -627,7 +629,7 @@ fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<~str> {
             return None
         }
     };
-    if !parser.eat(&EOF) {
+    if !parser.eat(&token::EOF) {
         cx.span_err(parser.span, "only one string literal allowed");
         return None;
     }
