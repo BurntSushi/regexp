@@ -375,7 +375,9 @@ impl Regexp {
         // fix this.
         //
         // The following is based on the code in slice::from_iter, but
-        // shortened since we know we're dealing with bytes.
+        // shortened since we know we're dealing with bytes. The key is that
+        // we already have a Vec<u8>, so there's no reason to re-collect it
+        // (which is what from_iter currently does).
         let mut xs = new.into_bytes();
         let size = mem::size_of::<RawVec<()>>().checked_add(&xs.len());
         let size = size.expect("overflow in replacen()");
