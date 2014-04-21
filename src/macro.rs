@@ -473,7 +473,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
                     };
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
-                    if $cond { self.add(nlist, $nextpc, groups) }
+                    if $cond { self.add(nlist, $nextpc, &mut *groups) }
                 })
             }
             EmptyEnd(flags) => {
@@ -488,7 +488,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
                     };
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
-                    if $cond { self.add(nlist, $nextpc, groups) }
+                    if $cond { self.add(nlist, $nextpc, &mut *groups) }
                 })
             }
             EmptyWordBoundary(flags) => {
@@ -500,7 +500,7 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
                     };
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
-                    if $cond { self.add(nlist, $nextpc, groups) }
+                    if $cond { self.add(nlist, $nextpc, &mut *groups) }
                 })
             }
             Save(slot) => {
@@ -514,10 +514,10 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
                             Submatches => {
                                 let old = groups[$slot];
                                 groups[$slot] = Some(self.ic);
-                                self.add(nlist, $nextpc, groups);
+                                self.add(nlist, $nextpc, &mut *groups);
                                 groups[$slot] = old;
                             }
-                            Exists | Location => self.add(nlist, $nextpc, groups),
+                            Exists | Location => self.add(nlist, $nextpc, &mut *groups),
                         }
                     })
                 } else {
@@ -527,10 +527,10 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
                             Submatches | Location => {
                                 let old = groups[$slot];
                                 groups[$slot] = Some(self.ic);
-                                self.add(nlist, $nextpc, groups);
+                                self.add(nlist, $nextpc, &mut *groups);
                                 groups[$slot] = old;
                             }
-                            Exists => self.add(nlist, $nextpc, groups),
+                            Exists => self.add(nlist, $nextpc, &mut *groups),
                         }
                     })
                 }
@@ -538,18 +538,18 @@ fn mk_add_insts(cx: &mut ExtCtxt, sp: Span, re: &Program) -> @ast::Expr {
             Jump(to) => {
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
-                    self.add(nlist, $to, groups);
+                    self.add(nlist, $to, &mut *groups);
                 })
             }
             Split(x, y) => {
                 quote_expr!(&*cx, {
                     nlist.add_empty($pc);
-                    self.add(nlist, $x, groups);
-                    self.add(nlist, $y, groups);
+                    self.add(nlist, $x, &mut *groups);
+                    self.add(nlist, $y, &mut *groups);
                 })
             }
             // For Match, OneChar, CharClass, Any
-            _ => quote_expr!(&*cx, nlist.add($pc, groups)),
+            _ => quote_expr!(&*cx, nlist.add($pc, &*groups)),
         };
         mk_inst_arm(cx, sp, pc, body)
     }).collect::<Vec<ast::Arm>>();
