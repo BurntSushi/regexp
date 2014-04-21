@@ -32,6 +32,36 @@ hard_32                                1159 ns/iter (+/- 43) = 27 MB/s
 hard_1K                               32916 ns/iter (+/- 802) = 31 MB/s
 hard_32K                            1046677 ns/iter (+/- 14354) = 31 MB/s
 no_exponential                       280041 ns/iter (+/- 7137)
+
+
+literal                                 125 ns/iter (+/- 0)
+not_literal                             944 ns/iter (+/- 29)
+match_class                            1259 ns/iter (+/- 25)
+match_class_in_range                   1342 ns/iter (+/- 6)
+replace_all                            1130 ns/iter (+/- 18)
+anchored_literal_short_non_match        432 ns/iter (+/- 4)
+anchored_literal_long_non_match        5825 ns/iter (+/- 157)
+anchored_literal_short_match            147 ns/iter (+/- 3)
+anchored_literal_long_match             137 ns/iter (+/- 2)
+one_pass_short_a                       1002 ns/iter (+/- 14)
+one_pass_short_a_not                   1500 ns/iter (+/- 32)
+one_pass_short_b                        734 ns/iter (+/- 10)
+one_pass_short_b_not                    974 ns/iter (+/- 10)
+one_pass_long_prefix                    508 ns/iter (+/- 4)
+one_pass_long_prefix_not                510 ns/iter (+/- 6)
+easy0_32                                263 ns/iter (+/- 15) = 121 MB/s
+easy0_1K                               1477 ns/iter (+/- 139) = 693 MB/s
+easy0_32K                             40140 ns/iter (+/- 917) = 816 MB/s
+easy1_32                                328 ns/iter (+/- 71) = 97 MB/s
+easy1_1K                               1774 ns/iter (+/- 524) = 577 MB/s
+easy1_32K                             48362 ns/iter (+/- 3161) = 677 MB/s
+medium_32                               774 ns/iter (+/- 34) = 41 MB/s
+medium_1K                             15623 ns/iter (+/- 293) = 65 MB/s
+medium_32K                           490884 ns/iter (+/- 2344) = 66 MB/s
+hard_32                                1306 ns/iter (+/- 30) = 24 MB/s
+hard_1K                               33060 ns/iter (+/- 245) = 30 MB/s
+hard_32K                            1048745 ns/iter (+/- 5576) = 31 MB/s
+no_exponential                       286117 ns/iter (+/- 2050)
 ```
 
 Golang
