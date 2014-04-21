@@ -35,7 +35,7 @@ use std::cmp;
 use std::mem;
 use std::slice::MutableVector;
 use super::compile::{
-    Program, Inst,
+    Program,
     Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Save, Jump, Split,
 };
@@ -64,7 +64,6 @@ pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
     Nfa {
         which: which,
         prog: prog,
-        insts: prog.insts.as_slice(),
         input: input,
         start: start,
         end: end,
@@ -76,7 +75,6 @@ pub fn run<'r, 't>(which: MatchKind, prog: &'r Program, input: &'t str,
 struct Nfa<'r, 't> {
     which: MatchKind,
     prog: &'r Program,
-    insts: &'r [Inst],
     input: &'t str,
     start: uint,
     end: uint,
@@ -98,8 +96,9 @@ impl<'r, 't> Nfa<'r, 't> {
             Submatches => self.prog.num_captures(),
         };
         let mut matched = false;
-        let mut clist = &mut Threads::new(self.which, self.insts.len(), ncaps);
-        let mut nlist = &mut Threads::new(self.which, self.insts.len(), ncaps);
+        let ninsts = self.prog.insts.len();
+        let mut clist = &mut Threads::new(self.which, ninsts, ncaps);
+        let mut nlist = &mut Threads::new(self.which, ninsts, ncaps);
 
         let mut groups = Vec::from_elem(ncaps * 2, None);
 
@@ -108,7 +107,7 @@ impl<'r, 't> Nfa<'r, 't> {
         // Make sure multi-line mode isn't enabled for it, otherwise we can't
         // drop the initial .*?
         let prefix_anchor = 
-            match self.insts[1] {
+            match *self.prog.insts.get(1) {
                 EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
                 _ => false,
             };
@@ -179,7 +178,7 @@ impl<'r, 't> Nfa<'r, 't> {
     fn step(&self, groups: &mut [Option<uint>], nlist: &mut Threads,
             caps: &mut [Option<uint>], pc: uint)
            -> StepState {
-        match self.insts[pc] {
+        match *self.prog.insts.get(pc) {
             Match => {
                 match self.which {
                     Exists => {
@@ -244,7 +243,7 @@ impl<'r, 't> Nfa<'r, 't> {
         //
         // We make a minor optimization by indicating that the state is "empty"
         // so that its capture groups are not filled in.
-        match self.insts[pc] {
+        match *self.prog.insts.get(pc) {
             EmptyBegin(flags) => {
                 let multi = flags & FLAG_MULTI > 0;
                 nlist.add(pc, groups, true);
@@ -473,6 +472,8 @@ impl Threads {
 
 /// Returns true if the character is a word character, according to the
 /// (Unicode friendly) Perl character class '\w'.
+/// Note that this is only use for testing word boundaries. The actual '\w'
+/// is encoded as a CharClass instruction.
 pub fn is_word(c: Option<char>) -> bool {
     let c = match c {
         None => return false,
