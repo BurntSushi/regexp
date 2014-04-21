@@ -77,8 +77,8 @@ clean:
 	rm -rf ./build/* ./build/.*.timestamp
 
 push:
-	git push origin native
-	git push github native
+	git push origin master
+	git push github master
 
 mozilla:
 	rm -rf $(MOZILLA_RUST)/src/libregexp/*
