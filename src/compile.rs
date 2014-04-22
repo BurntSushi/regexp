@@ -77,6 +77,7 @@ pub enum Inst {
 /// All of the data in a compiled expression is wrapped in "MaybeStatic" or
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
 /// (This makes it convenient and efficient for use with the `regexp!` macro.)
+#[deriving(Clone)]
 pub struct Program {
     // A sequence of instructions.
     pub insts: Vec<Inst>,

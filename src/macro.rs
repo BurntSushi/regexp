@@ -55,22 +55,27 @@ pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
 /// There are two primary differences between the code generated here and the
 /// general code in vm.rs.
 ///
-/// 1. All heap allocated is removed. Sized vector types are used instead.
+/// 1. All heap allocation is removed. Sized vector types are used instead.
 ///    Care must be taken to make sure that these vectors are not copied
 ///    gratuitously. (If you're not sure, run the benchmarks. They will yell
 ///    at you if you do.)
 /// 2. The main `match instruction { ... }` expressions are replaced with more
 ///    direct `match pc { ... }`. The generators can be found in 
-///    `mk_step_insts` and `mk_add_insts`.
+///    `step_insts` and `add_insts`.
 ///
 /// Other more minor changes include eliding code when possible (although this
 /// isn't completely thorough at the moment), and translating character class
 /// matching from using a binary search to a simple `match` expression (see
-/// `mk_match_class`).
+/// `match_class`).
+///
+/// It is strongly recommended to read the dynamic implementation in vm.rs
+/// first before trying to understand the code generator. The implementation
+/// strategy is identical and vm.rs has comments and will be easier to follow.
 fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
          -> ~MacResult {
     let regex = match parse(cx, tts) {
         Some(r) => r,
+        // error is logged in 'parse' with cx.span_err
         None => return DummyResult::any(sp),
     };
     let re = match Regexp::new(regex.to_owned()) {
@@ -81,34 +86,55 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
         }
     };
     let prog = match re.p {
-        Dynamic(ref prog) => prog,
+        Dynamic(ref prog) => prog.clone(),
         Native(_) => unreachable!(),
     };
 
-    let num_cap_locs = 2 * prog.num_captures();
-    let num_insts = prog.insts.len();
-    let cap_names = as_expr_vec(cx, sp, re.names,
-        |cx, _, name| match name {
-            &Some(ref name) => {
-                let name = name.as_slice();
-                quote_expr!(cx, Some(~$name))
+    let mut gen = NfaGen {
+        cx: cx, sp: sp, prog: prog,
+        names: re.names.clone(), original: re.original.clone(),
+    };
+    MacExpr::new(gen.code())
+}
+
+struct NfaGen<'a, 'c> {
+    cx: &'a mut ExtCtxt<'c>,
+    sp: codemap::Span,
+    prog: Program,
+    names: ~[Option<~str>],
+    original: ~str,
+}
+
+impl<'a, 'c> NfaGen<'a, 'c> {
+    fn code(&mut self) -> @ast::Expr {
+        // Most or all of the following things are used in the quasiquoted
+        // expression returned.
+        let num_cap_locs = 2 * self.prog.num_captures();
+        let num_insts = self.prog.insts.len();
+        let cap_names = self.vec_expr(self.names,
+            |cx, name| match name {
+                &Some(ref name) => {
+                    let name = name.as_slice();
+                    quote_expr!(cx, Some(~$name))
+                }
+                &None => quote_expr!(cx, None),
             }
-            &None => quote_expr!(cx, None),
-        }
-    );
-    let prefix_anchor = 
-        match prog.insts.as_slice()[1] {
-            EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
-            _ => false,
-        };
-    let init_groups = vec_from_fn(cx, sp, num_cap_locs,
-                                  |cx| quote_expr!(&*cx, None));
-    let prefix_bytes = as_expr_vec(cx, sp, prog.prefix.as_slice().as_bytes(),
-                                   |cx, _, b| quote_expr!(&*cx, $b));
-    let check_prefix = mk_check_prefix(cx, prog);
-    let step_insts = mk_step_insts(cx, sp, prog);
-    let add_insts = mk_add_insts(cx, sp, prog);
-    let expr = quote_expr!(&*cx, {
+        );
+        let prefix_anchor = 
+            match self.prog.insts.as_slice()[1] {
+                EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
+                _ => false,
+            };
+        let init_groups = self.vec_from_fn(num_cap_locs,
+                                           |cx| quote_expr!(&*cx, None));
+        let prefix_bytes = self.vec_expr(self.prog.prefix.as_slice().as_bytes(),
+                                         |cx, b| quote_expr!(&*cx, $b));
+        let check_prefix = self.check_prefix();
+        let step_insts = self.step_insts();
+        let add_insts = self.add_insts();
+        let regex = self.original.as_slice();
+
+        quote_expr!(&*self.cx, {
 fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             start: uint, end: uint) -> Vec<Option<uint>> {
     #![allow(unused_imports)]
@@ -279,13 +305,325 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         }
     }
 }
+
 ::regexp::Regexp {
     original: ~$regex,
     names: ~$cap_names,
     p: ::regexp::native::Native(exec),
 }
-    });
-    MacExpr::new(expr)
+        })
+    }
+
+    // Generates code for the `add` method, which is responsible for adding
+    // zero-width states to the next queue of states to visit.
+    fn add_insts(&self) -> @ast::Expr {
+        let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
+            let nextpc = pc + 1;
+            let body = match *inst {
+                EmptyBegin(flags) => {
+                    let nl = '\n';
+                    let cond =
+                        if flags & FLAG_MULTI > 0 {
+                            quote_expr!(&*self.cx,
+                                self.chars.is_begin()
+                                || self.chars.prev == Some($nl)
+                            )
+                        } else {
+                            quote_expr!(&*self.cx, self.chars.is_begin())
+                        };
+                    quote_expr!(&*self.cx, {
+                        nlist.add_empty($pc);
+                        if $cond { self.add(nlist, $nextpc, &mut *groups) }
+                    })
+                }
+                EmptyEnd(flags) => {
+                    let nl = '\n';
+                    let cond =
+                        if flags & FLAG_MULTI > 0 {
+                            quote_expr!(&*self.cx,
+                                self.chars.is_end()
+                                || self.chars.cur == Some($nl)
+                            )
+                        } else {
+                            quote_expr!(&*self.cx, self.chars.is_end())
+                        };
+                    quote_expr!(&*self.cx, {
+                        nlist.add_empty($pc);
+                        if $cond { self.add(nlist, $nextpc, &mut *groups) }
+                    })
+                }
+                EmptyWordBoundary(flags) => {
+                    let cond =
+                        if flags & FLAG_NEGATED > 0 {
+                            quote_expr!(&*self.cx, !self.chars.is_word_boundary())
+                        } else {
+                            quote_expr!(&*self.cx, self.chars.is_word_boundary())
+                        };
+                    quote_expr!(&*self.cx, {
+                        nlist.add_empty($pc);
+                        if $cond { self.add(nlist, $nextpc, &mut *groups) }
+                    })
+                }
+                Save(slot) => {
+                    // If this is saving a submatch location but we request
+                    // existence or only full match location, then we can skip
+                    // right over it every time.
+                    if slot > 1 {
+                        quote_expr!(&*self.cx, {
+                            nlist.add_empty($pc);
+                            match self.which {
+                                Submatches => {
+                                    let old = groups[$slot];
+                                    groups[$slot] = Some(self.ic);
+                                    self.add(nlist, $nextpc, &mut *groups);
+                                    groups[$slot] = old;
+                                }
+                                Exists | Location =>
+                                    self.add(nlist, $nextpc, &mut *groups),
+                            }
+                        })
+                    } else {
+                        quote_expr!(&*self.cx, {
+                            nlist.add_empty($pc);
+                            match self.which {
+                                Submatches | Location => {
+                                    let old = groups[$slot];
+                                    groups[$slot] = Some(self.ic);
+                                    self.add(nlist, $nextpc, &mut *groups);
+                                    groups[$slot] = old;
+                                }
+                                Exists =>
+                                    self.add(nlist, $nextpc, &mut *groups),
+                            }
+                        })
+                    }
+                }
+                Jump(to) => {
+                    quote_expr!(&*self.cx, {
+                        nlist.add_empty($pc);
+                        self.add(nlist, $to, &mut *groups);
+                    })
+                }
+                Split(x, y) => {
+                    quote_expr!(&*self.cx, {
+                        nlist.add_empty($pc);
+                        self.add(nlist, $x, &mut *groups);
+                        self.add(nlist, $y, &mut *groups);
+                    })
+                }
+                // For Match, OneChar, CharClass, Any
+                _ => quote_expr!(&*self.cx, nlist.add($pc, &*groups)),
+            };
+            self.arm_inst(pc, body)
+        }).collect::<Vec<ast::Arm>>();
+
+        self.match_insts(arms)
+    }
+
+    // Generates the code for the `step` method, which processes all states
+    // in the current queue that consume a single character.
+    fn step_insts(&self) -> @ast::Expr {
+        let arms = self.prog.insts.iter().enumerate().map(|(pc, inst)| {
+            let nextpc = pc + 1;
+            let body = match *inst {
+                Match => {
+                    quote_expr!(&*self.cx, {
+                        match self.which {
+                            Exists => {
+                                return StepMatchEarlyReturn
+                            }
+                            Location => {
+                                groups[0] = caps[0];
+                                groups[1] = caps[1];
+                                return StepMatch
+                            }
+                            Submatches => {
+                                unsafe { groups.copy_memory(caps.as_slice()) }
+                                return StepMatch
+                            }
+                        }
+                    })
+                }
+                OneChar(c, flags) => {
+                    if flags & FLAG_NOCASE > 0 {
+                        let upc = c.to_uppercase();
+                        quote_expr!(&*self.cx, {
+                            let upc = self.chars.prev.map(|c| c.to_uppercase());
+                            if upc == Some($upc) {
+                                self.add(nlist, $nextpc, caps);
+                            }
+                        })
+                    } else {
+                        quote_expr!(&*self.cx, {
+                            if self.chars.prev == Some($c) {
+                                self.add(nlist, $nextpc, caps);
+                            }
+                        })
+                    }
+                }
+                CharClass(ref ranges, flags) => {
+                    let negate = flags & FLAG_NEGATED > 0;
+                    let casei = flags & FLAG_NOCASE > 0;
+                    let get_char =
+                        if casei {
+                            quote_expr!(&*self.cx, self.chars.prev.unwrap().to_uppercase())
+                        } else {
+                            quote_expr!(&*self.cx, self.chars.prev.unwrap())
+                        };
+                    let negcond =
+                        if negate {
+                            quote_expr!(&*self.cx, !found)
+                        } else {
+                            quote_expr!(&*self.cx, found)
+                        };
+                    let mranges = self.match_class(casei, ranges.as_slice());
+                    quote_expr!(&*self.cx, {
+                        if self.chars.prev.is_some() {
+                            let c = $get_char;
+                            let found = $mranges;
+                            if $negcond {
+                                self.add(nlist, $nextpc, caps);
+                            }
+                        }
+                    })
+                }
+                Any(flags) => {
+                    if flags & FLAG_DOTNL > 0 {
+                        quote_expr!(&*self.cx, self.add(nlist, $nextpc, caps))
+                    } else {
+                        let nl = '\n'; // no char lits allowed? wtf?
+                        quote_expr!(&*self.cx, {
+                            if self.chars.prev != Some($nl) {
+                                self.add(nlist, $nextpc, caps)
+                            }
+                        })
+                    }
+                }
+                // EmptyBegin, EmptyEnd, EmptyWordBoundary, Save, Jump, Split
+                _ => quote_expr!(&*self.cx, {}),
+            };
+            self.arm_inst(pc, body)
+        }).collect::<Vec<ast::Arm>>();
+
+        self.match_insts(arms)
+    }
+
+    // Translates a character class into a match expression.
+    // This avoids a binary search (and is hopefully replaced by a jump
+    // table).
+    fn match_class(&self, casei: bool, ranges: &[(char, char)]) -> @ast::Expr {
+        let mut arms = ranges.iter().map(|&(mut start, mut end)| {
+            if casei {
+                start = start.to_uppercase();
+                end = end.to_uppercase();
+            }
+            ast::Arm {
+                pats: vec!(@ast::Pat{
+                    id: ast::DUMMY_NODE_ID,
+                    span: self.sp,
+                    node: ast::PatRange(quote_expr!(&*self.cx, $start),
+                                        quote_expr!(&*self.cx, $end)),
+                }),
+                guard: None,
+                body: quote_expr!(&*self.cx, true),
+            }
+        }).collect::<Vec<ast::Arm>>();
+
+        arms.push(self.wild_arm_expr(quote_expr!(&*self.cx, false)));
+
+        let match_on = quote_expr!(&*self.cx, c);
+        self.dummy_expr(ast::ExprMatch(match_on, arms))
+    }
+
+    // Generates code for checking a literal prefix of the search string.
+    // The code is only generated if the regexp *has* a literal prefix.
+    // Otherwise, a no-op is returned.
+    fn check_prefix(&self) -> @ast::Expr {
+        if self.prog.prefix.len() == 0 {
+            quote_expr!(&*self.cx, {})
+        } else {
+            quote_expr!(&*self.cx,
+                if clist.size == 0 {
+                    let haystack = self.input.as_bytes().slice_from(self.ic);
+                    match find_prefix(prefix_bytes, haystack) {
+                        None => break,
+                        Some(i) => {
+                            self.ic += i;
+                            next_ic = self.chars.set(self.ic);
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    // Builds a `match pc { ... }` expression from a list of arms, specifically
+    // for matching the current program counter with an instruction.
+    // A wild-card arm is automatically added that executes a no-op. It will
+    // never be used, but is added to satisfy the compiler complaining about
+    // non-exhaustive patterns.
+    fn match_insts(&self, mut arms: Vec<ast::Arm>) -> @ast::Expr {
+        let mat_pc = quote_expr!(&*self.cx, pc);
+        arms.push(self.wild_arm_expr(quote_expr!(&*self.cx, {})));
+        self.dummy_expr(ast::ExprMatch(mat_pc, arms))
+    }
+
+    // Creates a match arm for the instruction at `pc` with the expression
+    // `body`.
+    fn arm_inst(&self, pc: uint, body: @ast::Expr) -> ast::Arm {
+        ast::Arm {
+            pats: vec!(@ast::Pat{
+                id: ast::DUMMY_NODE_ID,
+                span: self.sp,
+                node: ast::PatLit(quote_expr!(&*self.cx, $pc)),
+            }),
+            guard: None,
+            body: body,
+        }
+    }
+
+    // Creates a wild-card match arm with the expression `body`.
+    fn wild_arm_expr(&self, body: @ast::Expr) -> ast::Arm {
+        ast::Arm {
+            pats: vec!(@ast::Pat{
+                id: ast::DUMMY_NODE_ID,
+                span: self.sp,
+                node: ast::PatWild,
+            }),
+            guard: None,
+            body: body,
+        }
+    }
+
+    // Builds a `[a, b, .., len]` expression where each element is the result
+    // of executing `to_expr`.
+    fn vec_from_fn(&self, len: uint, to_expr: |&ExtCtxt| -> @ast::Expr)
+                  -> @ast::Expr {
+        self.vec_expr(Vec::from_elem(len, ()).as_slice(),
+                      |cx, _| to_expr(cx))
+    }
+
+    // Converts `xs` to a `[x1, x2, .., xN]` expression by calling `to_expr`
+    // on each element in `xs`.
+    fn vec_expr<T>(&self, xs: &[T], to_expr: |&ExtCtxt, &T| -> @ast::Expr)
+                  -> @ast::Expr {
+        let mut exprs = vec!();
+        for x in xs.iter() {
+            exprs.push(to_expr(self.cx, x))
+        }
+        let vec_exprs = self.dummy_expr(ast::ExprVec(exprs));
+        quote_expr!(&*self.cx, $vec_exprs)
+    }
+
+    // Creates an expression with a dummy node ID given an underlying
+    // `ast::Expr_`.
+    fn dummy_expr(&self, e: ast::Expr_) -> @ast::Expr {
+        @ast::Expr {
+            id: ast::DUMMY_NODE_ID,
+            node: e,
+            span: self.sp,
+        }
+    }
 }
 
 // This trait is defined in the quote module in the syntax crate, but I
@@ -310,302 +648,8 @@ impl ToTokens for bool {
     }
 }
 
-fn mk_match_insts(cx: &mut ExtCtxt, sp: codemap::Span, arms: Vec<ast::Arm>)
-                 -> @ast::Expr {
-    let mat_pc = quote_expr!(&*cx, pc);
-    as_expr(sp, ast::ExprMatch(mat_pc, arms))
-}
-
-fn mk_inst_arm(cx: &mut ExtCtxt, sp: codemap::Span, pc: uint, body: @ast::Expr)
-              -> ast::Arm {
-    ast::Arm {
-        pats: vec!(@ast::Pat{
-            id: ast::DUMMY_NODE_ID,
-            span: sp,
-            node: ast::PatLit(quote_expr!(&*cx, $pc)),
-        }),
-        guard: None,
-        body: body,
-    }
-}
-
-fn mk_any_arm(sp: codemap::Span, e: @ast::Expr) -> ast::Arm {
-    ast::Arm {
-        pats: vec!(@ast::Pat{
-            id: ast::DUMMY_NODE_ID,
-            span: sp,
-            node: ast::PatWild,
-        }),
-        guard: None,
-        body: e,
-    }
-}
-
-fn mk_match_class(cx: &mut ExtCtxt, sp: codemap::Span,
-                  casei: bool, ranges: &[(char, char)]) -> @ast::Expr {
-    let mut arms = ranges.iter().map(|&(mut start, mut end)| {
-        if casei {
-            start = start.to_uppercase();
-            end = end.to_uppercase();
-        }
-        ast::Arm {
-            pats: vec!(@ast::Pat{
-                id: ast::DUMMY_NODE_ID,
-                span: sp,
-                node: ast::PatRange(quote_expr!(&*cx, $start),
-                                    quote_expr!(&*cx, $end)),
-            }),
-            guard: None,
-            body: quote_expr!(&*cx, true),
-        }
-    }).collect::<Vec<ast::Arm>>();
-
-    let nada = quote_expr!(&*cx, false);
-    arms.push(mk_any_arm(sp, nada));
-
-    let match_on = quote_expr!(&*cx, c);
-    as_expr(sp, ast::ExprMatch(match_on, arms))
-}
-
-fn mk_step_insts(cx: &mut ExtCtxt, sp: codemap::Span, re: &Program)
-                -> @ast::Expr {
-    let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
-        let nextpc = pc + 1;
-        let body = match *inst {
-            Match => {
-                quote_expr!(&*cx, {
-                    match self.which {
-                        Exists => {
-                            return StepMatchEarlyReturn
-                        }
-                        Location => {
-                            groups[0] = caps[0];
-                            groups[1] = caps[1];
-                            return StepMatch
-                        }
-                        Submatches => {
-                            unsafe { groups.copy_memory(caps.as_slice()) }
-                            return StepMatch
-                        }
-                    }
-                })
-            }
-            OneChar(c, flags) => {
-                if flags & FLAG_NOCASE > 0 {
-                    let upc = c.to_uppercase();
-                    quote_expr!(&*cx, {
-                        if self.chars.prev.map(|c| c.to_uppercase()) == Some($upc) {
-                            self.add(nlist, $nextpc, caps);
-                        }
-                    })
-                } else {
-                    quote_expr!(&*cx, {
-                        if self.chars.prev == Some($c) {
-                            self.add(nlist, $nextpc, caps);
-                        }
-                    })
-                }
-            }
-            CharClass(ref ranges, flags) => {
-                let negate = flags & FLAG_NEGATED > 0;
-                let casei = flags & FLAG_NOCASE > 0;
-                let get_char =
-                    if casei {
-                        quote_expr!(&*cx, self.chars.prev.unwrap().to_uppercase())
-                    } else {
-                        quote_expr!(&*cx, self.chars.prev.unwrap())
-                    };
-                let negcond =
-                    if negate {
-                        quote_expr!(&*cx, !found)
-                    } else {
-                        quote_expr!(&*cx, found)
-                    };
-                let match_ranges = mk_match_class(cx, sp,
-                                                  casei, ranges.as_slice());
-                quote_expr!(&*cx, {
-                    if self.chars.prev.is_some() {
-                        let c = $get_char;
-                        let found = $match_ranges;
-                        if $negcond {
-                            self.add(nlist, $nextpc, caps);
-                        }
-                    }
-                })
-            }
-            Any(flags) => {
-                if flags & FLAG_DOTNL > 0 {
-                    quote_expr!(&*cx, self.add(nlist, $nextpc, caps))
-                } else {
-                    let nl = '\n'; // no char lits allowed? wtf?
-                    quote_expr!(&*cx, {
-                        if self.chars.prev != Some($nl) {
-                            self.add(nlist, $nextpc, caps)
-                        }
-                    })
-                }
-            }
-            // For EmptyBegin, EmptyEnd, EmptyWordBoundary, Save, Jump, Split
-            _ => quote_expr!(&*cx, {}),
-        };
-        mk_inst_arm(cx, sp, pc, body)
-    }).collect::<Vec<ast::Arm>>();
-
-    let nada = quote_expr!(&*cx, {});
-    arms.push(mk_any_arm(sp, nada));
-    let m = mk_match_insts(cx, sp, arms);
-    m
-}
-
-fn mk_add_insts(cx: &mut ExtCtxt, sp: codemap::Span, re: &Program)
-               -> @ast::Expr {
-    let mut arms = re.insts.as_slice().iter().enumerate().map(|(pc, inst)| {
-        let nextpc = pc + 1;
-        let body = match *inst {
-            EmptyBegin(flags) => {
-                let nl = '\n';
-                let cond =
-                    if flags & FLAG_MULTI > 0 {
-                        quote_expr!(&*cx,
-                            self.chars.is_begin() || self.chars.prev == Some($nl)
-                        )
-                    } else {
-                        quote_expr!(&*cx, self.chars.is_begin())
-                    };
-                quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
-                    if $cond { self.add(nlist, $nextpc, &mut *groups) }
-                })
-            }
-            EmptyEnd(flags) => {
-                let nl = '\n';
-                let cond =
-                    if flags & FLAG_MULTI > 0 {
-                        quote_expr!(&*cx,
-                            self.chars.is_end() || self.chars.cur == Some($nl)
-                        )
-                    } else {
-                        quote_expr!(&*cx, self.chars.is_end())
-                    };
-                quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
-                    if $cond { self.add(nlist, $nextpc, &mut *groups) }
-                })
-            }
-            EmptyWordBoundary(flags) => {
-                let cond =
-                    if flags & FLAG_NEGATED > 0 {
-                        quote_expr!(&*cx, !self.chars.is_word_boundary())
-                    } else {
-                        quote_expr!(&*cx, self.chars.is_word_boundary())
-                    };
-                quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
-                    if $cond { self.add(nlist, $nextpc, &mut *groups) }
-                })
-            }
-            Save(slot) => {
-                // If this is saving a submatch location but we request
-                // existence or only full match location, then we can skip
-                // right over it every time.
-                if slot > 1 {
-                    quote_expr!(&*cx, {
-                        nlist.add_empty($pc);
-                        match self.which {
-                            Submatches => {
-                                let old = groups[$slot];
-                                groups[$slot] = Some(self.ic);
-                                self.add(nlist, $nextpc, &mut *groups);
-                                groups[$slot] = old;
-                            }
-                            Exists | Location => self.add(nlist, $nextpc, &mut *groups),
-                        }
-                    })
-                } else {
-                    quote_expr!(&*cx, {
-                        nlist.add_empty($pc);
-                        match self.which {
-                            Submatches | Location => {
-                                let old = groups[$slot];
-                                groups[$slot] = Some(self.ic);
-                                self.add(nlist, $nextpc, &mut *groups);
-                                groups[$slot] = old;
-                            }
-                            Exists => self.add(nlist, $nextpc, &mut *groups),
-                        }
-                    })
-                }
-            }
-            Jump(to) => {
-                quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
-                    self.add(nlist, $to, &mut *groups);
-                })
-            }
-            Split(x, y) => {
-                quote_expr!(&*cx, {
-                    nlist.add_empty($pc);
-                    self.add(nlist, $x, &mut *groups);
-                    self.add(nlist, $y, &mut *groups);
-                })
-            }
-            // For Match, OneChar, CharClass, Any
-            _ => quote_expr!(&*cx, nlist.add($pc, &*groups)),
-        };
-        mk_inst_arm(cx, sp, pc, body)
-    }).collect::<Vec<ast::Arm>>();
-
-    let nada = quote_expr!(&*cx, {});
-    arms.push(mk_any_arm(sp, nada));
-    let m = mk_match_insts(cx, sp, arms);
-    m
-}
-
-fn mk_check_prefix(cx: &mut ExtCtxt, re: &Program) -> @ast::Expr {
-    if re.prefix.len() == 0 {
-        quote_expr!(&*cx, {})
-    } else {
-        quote_expr!(&*cx,
-            if clist.size == 0 {
-                let haystack = self.input.as_bytes().slice_from(self.ic);
-                match find_prefix(prefix_bytes, haystack) {
-                    None => break,
-                    Some(i) => {
-                        self.ic += i;
-                        next_ic = self.chars.set(self.ic);
-                    }
-                }
-            }
-        )
-    }
-}
-
-fn vec_from_fn(cx: &mut ExtCtxt, sp: codemap::Span, len: uint,
-               to_expr: |&mut ExtCtxt| -> @ast::Expr) -> @ast::Expr {
-    as_expr_vec(cx, sp, Vec::from_elem(len, ()).as_slice(),
-                |cx, _, _| to_expr(cx))
-}
-
-fn as_expr_vec<T>(cx: &mut ExtCtxt, sp: codemap::Span, xs: &[T],
-                  to_expr: |&mut ExtCtxt, codemap::Span, &T| -> @ast::Expr)
-                 -> @ast::Expr {
-    let mut exprs = vec!();
-    // xs.iter() doesn't work here for some reason. No idea why.
-    for i in ::std::iter::range(0, xs.len()) {
-        exprs.push(to_expr(&mut *cx, sp, &xs[i]))
-    }
-    let vec_exprs = as_expr(sp, ast::ExprVec(exprs));
-    quote_expr!(&*cx, $vec_exprs)
-}
-
-fn as_expr(sp: codemap::Span, e: ast::Expr_) -> @ast::Expr {
-    @ast::Expr {
-        id: ast::DUMMY_NODE_ID,
-        node: e,
-        span: sp,
-    }
-}
-
+/// Looks for a single string literal and returns it.
+/// Otherwise, logs an error with cx.span_err and returns None.
 fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<~str> {
     let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
                                                 Vec::from_slice(tts));
