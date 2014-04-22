@@ -104,6 +104,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// makes it much faster when searching text.
 /// More details about the `regexp!` macro can be found in the `regexp` crate
 /// documentation.
+#[deriving(Clone)]
 #[allow(visible_private_types)]
 pub struct Regexp {
     /// The representation of `Regexp` is exported to support the `regexp!`
@@ -122,6 +123,15 @@ pub struct Regexp {
 pub enum MaybeNative {
     Dynamic(Program),
     Native(fn(MatchKind, &str, uint, uint) -> Vec<Option<uint>>),
+}
+
+impl Clone for MaybeNative {
+    fn clone(&self) -> MaybeNative {
+        match *self {
+            Dynamic(ref p) => Dynamic(p.clone()),
+            Native(fp) => Native(fp),
+        }
+    }
 }
 
 impl Regexp {
