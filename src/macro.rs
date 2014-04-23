@@ -212,7 +212,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
 
         // Sometimes `nlist` is never used (for empty regexes).
         #[allow(unused_variable)]
-        #[inline(always)]
+        #[inline]
         fn step(&self, groups: &mut Captures, nlist: &mut Threads,
                 caps: &mut Captures, pc: uint) -> StepState {
             $step_insts
@@ -250,7 +250,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             }
         }
 
-        #[inline(always)]
+        #[inline]
         fn add(&mut self, pc: uint, groups: &Captures) {
             let t = &mut self.queue[self.size];
             t.pc = pc;
@@ -270,30 +270,30 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             self.size += 1;
         }
 
-        #[inline(always)]
+        #[inline]
         fn add_empty(&mut self, pc: uint) {
             self.queue[self.size].pc = pc;
             self.sparse[pc] = self.size;
             self.size += 1;
         }
 
-        #[inline(always)]
+        #[inline]
         fn contains(&self, pc: uint) -> bool {
             let s = self.sparse[pc];
             s < self.size && self.queue[s].pc == pc
         }
 
-        #[inline(always)]
+        #[inline]
         fn empty(&mut self) {
             self.size = 0;
         }
 
-        #[inline(always)]
+        #[inline]
         fn pc(&self, i: uint) -> uint {
             self.queue[i].pc
         }
 
-        #[inline(always)]
+        #[inline]
         fn groups<'r>(&'r mut self, i: uint) -> &'r mut Captures {
             &'r mut self.queue[i].groups
         }

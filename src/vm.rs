@@ -322,7 +322,7 @@ impl<'r, 't> Nfa<'r, 't> {
     // all of Unicode. I believe we need to check the entire fold for each
     // character. This will be easy to add if and when it gets added to Rust's
     // standard library.
-    #[inline(always)]
+    #[inline]
     fn char_eq(&self, casei: bool, textc: Option<char>, regc: char) -> bool {
         match textc {
             None => false,
@@ -333,7 +333,7 @@ impl<'r, 't> Nfa<'r, 't> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn char_is(&self, textc: Option<char>, regc: char) -> bool {
         textc == Some(regc)
     }
@@ -367,7 +367,7 @@ impl<'t> CharReader<'t> {
 
     /// Sets the previous and current character given any arbitrary byte
     /// index (at a unicode codepoint boundary).
-    #[inline(always)]
+    #[inline]
     pub fn set(&mut self, ic: uint) -> uint {
         self.prev = None;
         self.cur = None;
@@ -393,7 +393,7 @@ impl<'t> CharReader<'t> {
 
     /// Does the same as `set`, except it always advances to the next
     /// character in the input (and therefore does half as many UTF8 decodings).
-    #[inline(always)]
+    #[inline]
     pub fn advance(&mut self) -> uint {
         self.prev = self.cur;
         if self.next < self.input.len() {
@@ -409,12 +409,12 @@ impl<'t> CharReader<'t> {
 
     /// Returns true if and only if this is the beginning of the input
     /// (ignoring the range of the input to search).
-    #[inline(always)]
+    #[inline]
     pub fn is_begin(&self) -> bool { self.prev.is_none() }
 
     /// Returns true if and only if this is the end of the input
     /// (ignoring the range of the input to search).
-    #[inline(always)]
+    #[inline]
     pub fn is_end(&self) -> bool { self.cur.is_none() }
 
     /// Returns true if and only if the current position is a word boundary.
@@ -481,23 +481,23 @@ impl Threads {
         self.size += 1;
     }
 
-    #[inline(always)]
+    #[inline]
     fn contains(&self, pc: uint) -> bool {
         let s = *self.sparse.get(pc);
         s < self.size && self.queue.get(s).pc == pc
     }
 
-    #[inline(always)]
+    #[inline]
     fn empty(&mut self) {
         self.size = 0;
     }
 
-    #[inline(always)]
+    #[inline]
     fn pc(&self, i: uint) -> uint {
         self.queue.get(i).pc
     }
 
-    #[inline(always)]
+    #[inline]
     fn groups<'r>(&'r mut self, i: uint) -> &'r mut [Option<uint>] {
         self.queue.get_mut(i).groups.as_mut_slice()
     }
@@ -534,7 +534,7 @@ pub fn is_word(c: Option<char>) -> bool {
 /// If `casei` is `true`, then this ordering is computed case insensitively.
 ///
 /// This function is meant to be used with a binary search.
-#[inline(always)]
+#[inline]
 fn class_cmp(casei: bool, mut textc: char,
              (mut start, mut end): (char, char)) -> Ordering {
     if casei {
@@ -562,7 +562,7 @@ fn class_cmp(casei: bool, mut textc: char,
 /// If `needle` is not in `haystack`, then `None` is returned.
 ///
 /// Note that this is using a naive substring algorithm.
-#[inline(always)]
+#[inline]
 pub fn find_prefix(needle: &[u8], haystack: &[u8]) -> Option<uint> {
     let (hlen, nlen) = (haystack.len(), needle.len());
     if nlen > hlen || nlen == 0 {

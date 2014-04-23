@@ -895,7 +895,7 @@ fn exec_slice(re: &Regexp, which: MatchKind,
     }
 }
 
-#[inline(always)]
+#[inline]
 fn has_match(caps: &CaptureLocs) -> bool {
     caps.len() >= 2 && caps.get(0).is_some() && caps.get(1).is_some()
 }

@@ -225,7 +225,7 @@ impl<'r> Compiler<'r> {
     }
 
     /// Appends the given instruction to the program.
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, x: Inst) {
         self.insts.push(x)
     }
@@ -233,7 +233,7 @@ impl<'r> Compiler<'r> {
     /// Appends an *empty* `Split` instruction to the program and returns
     /// the index of that instruction. (The index can then be used to "patch"
     /// the actual locations of the split in later.)
-    #[inline(always)]
+    #[inline]
     fn empty_split(&mut self) -> InstIdx {
         self.insts.push(Split(0, 0));
         self.insts.len() - 1
@@ -243,7 +243,7 @@ impl<'r> Compiler<'r> {
     /// `i` to `pc1` and `pc2`, respectively.
     /// If the instruction at index `i` isn't a `Split` instruction, then
     /// `fail!` is called.
-    #[inline(always)]
+    #[inline]
     fn set_split(&mut self, i: InstIdx, pc1: InstIdx, pc2: InstIdx) {
         let split = self.insts.get_mut(i);
         match *split {
@@ -254,7 +254,7 @@ impl<'r> Compiler<'r> {
 
     /// Appends an *empty* `Jump` instruction to the program and returns the
     /// index of that instruction.
-    #[inline(always)]
+    #[inline]
     fn empty_jump(&mut self) -> InstIdx {
         self.insts.push(Jump(0));
         self.insts.len() - 1
@@ -263,7 +263,7 @@ impl<'r> Compiler<'r> {
     /// Sets the location of a `Jump` instruction at index `i` to `pc`.
     /// If the instruction at index `i` isn't a `Jump` instruction, then
     /// `fail!` is called.
-    #[inline(always)]
+    #[inline]
     fn set_jump(&mut self, i: InstIdx, pc: InstIdx) {
         let jmp = self.insts.get_mut(i);
         match *jmp {
