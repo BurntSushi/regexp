@@ -14,8 +14,8 @@
 
 use std::cmp;
 use std::iter;
-use super::parse;
-use super::parse::{
+use parse;
+use parse::{
     Flags, FLAG_EMPTY,
     Nothing, Literal, Dot, Class, Begin, End, WordBoundary, Capture, Cat, Alt,
     Rep,

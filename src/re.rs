@@ -19,17 +19,17 @@ use std::ptr;
 use std::rt::global_heap::malloc_raw;
 use RawVec = std::raw::Vec;
 
-use super::compile::Program;
-use super::parse::{parse, Error};
-use super::vm;
-use super::vm::{CaptureLocs, MatchKind, Exists, Location, Submatches};
+use compile::Program;
+use parse;
+use vm;
+use vm::{CaptureLocs, MatchKind, Exists, Location, Submatches};
 
 /// Escapes all regular expression meta characters in `text` so that it may be
 /// safely used in a regular expression as a literal string.
 pub fn quote(text: &str) -> ~str {
     let mut quoted = StrBuf::with_capacity(text.len());
     for c in text.chars() {
-        if super::parse::is_punct(c) {
+        if parse::is_punct(c) {
             quoted.push_char('\\')
         }
         quoted.push_char(c);
@@ -47,7 +47,7 @@ pub fn quote(text: &str) -> ~str {
 ///
 /// Note that you should prefer the `regexp!` macro when possible. For example,
 /// `regexp!("...").is_match("...")`.
-pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
+pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
     Regexp::new(regex).map(|r| r.is_match(text))
 }
 
@@ -139,8 +139,8 @@ impl Regexp {
     /// used repeatedly to search, split or replace text in a string.
     ///
     /// If an invalid expression is given, then an error is returned.
-    pub fn new(re: &str) -> Result<Regexp, Error> {
-        let ast = try!(parse(re));
+    pub fn new(re: &str) -> Result<Regexp, parse::Error> {
+        let ast = try!(parse::parse(re));
         let (prog, names) = Program::new(ast);
         Ok(Regexp { original: re.to_owned(), names: names, p: Dynamic(prog) })
     }

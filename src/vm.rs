@@ -36,13 +36,13 @@
 use std::cmp;
 use std::mem;
 use std::slice::MutableVector;
-use super::compile::{
+use compile::{
     Program,
     Match, OneChar, CharClass, Any, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Save, Jump, Split,
 };
-use super::parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
-use super::parse::unicode::PERLW;
+use parse::{FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED};
+use parse::unicode::PERLW;
 
 pub type CaptureLocs = Vec<Option<uint>>;
 
