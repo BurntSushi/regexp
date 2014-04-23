@@ -1026,21 +1026,3 @@ static ASCII_CLASSES: NamedClasses = &[
     ("word", &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')]),
     ("xdigit", &[('0', '9'), ('A', 'F'), ('a', 'f')]),
 ];
-
-#[allow(dead_code)]
-static PERL_CLASSES: NamedClasses = &[
-    // Classes must be in alphabetical order so that bsearch works.
-    // \d             digits (== [0-9])
-    // \D             not digits (== [^0-9])
-    // \s             whitespace (== [\t\n\f\r ])
-    // \S             not whitespace (== [^\t\n\f\r ])
-    // \w             ASCII word characters (== [0-9A-Za-z_])
-    // \W             not ASCII word characters (== [^0-9A-Za-z_])
-    // Taken from: http://golang.org/pkg/regexp/syntax/
-    //
-    // The negated classes are handled in the parser.
-    ("d", &[('0', '9')]),
-    ("s", &[('\t', '\t'), ('\n', '\n'), ('\x0C', '\x0C'),
-            ('\r', '\r'), (' ', ' ')]),
-    ("w", &[('0', '9'), ('A', 'Z'), ('a', 'z'), ('_', '_')]),
-];
