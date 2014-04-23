@@ -651,7 +651,7 @@ impl ToTokens for bool {
 fn parse(cx: &mut ExtCtxt, tts: &[ast::TokenTree]) -> Option<~str> {
     let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
                                                 Vec::from_slice(tts));
-    let entry = parser.parse_expr();
+    let entry = cx.expand_expr(parser.parse_expr());
     let regex = match entry.node {
         ast::ExprLit(lit) => {
             match lit.node {
