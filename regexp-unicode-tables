@@ -141,8 +141,8 @@ if __name__ == '__main__':
     perls = map(ord, ['\t', '\n', '\x0C', '\r', ' '])
     sgroups = ranges_to_rust(group(perls + cats['Z'][:]))
 
-    perlw = [ord('_')] + perld \
-            + range(ord('a'), ord('z') + 1) + range(ord('A'), ord('Z') + 1)
+    low, up = (range(ord('a'), ord('z') + 1), range(ord('A'), ord('Z') + 1))
+    perlw = [ord('_')] + perld + low + up
     wgroups = ranges_to_rust(group(perlw + cats['L'][:]))
 
     tpl = '''// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
