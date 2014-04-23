@@ -10,6 +10,7 @@
 
 use collections::HashMap;
 use std::cast;
+use std::fmt;
 use std::from_str::from_str;
 use std::str::{MaybeOwned, Owned, Slice};
 use std::str::raw;
@@ -118,6 +119,13 @@ pub struct Regexp {
     pub names: ~[Option<~str>],
     #[doc(hidden)]
     pub p: MaybeNative,
+}
+
+impl fmt::Show for Regexp {
+    /// Shows the original regular expression.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f.buf, "{}", self.original)
+    }
 }
 
 pub enum MaybeNative {
@@ -398,11 +406,6 @@ impl Regexp {
             xs.set_len(0);
             cast::transmute(ret)
         }
-    }
-
-    /// Returns the original string used to construct this regular expression.
-    pub fn to_str<'r>(&'r self) -> &'r str {
-        self.original.as_slice()
     }
 }
 
