@@ -7,11 +7,11 @@ extern crate regexp;
 #[phase(syntax)]extern crate regexp_macros;
 
 use regexp::{NoExpand, Regexp};
- 
+
 fn replace(re: &Regexp, text: &str, rep: &str) -> ~str {
     re.replace_all(text, NoExpand(rep))
 }
- 
+
 fn count_matches(seq: &str, variant: &Regexp) -> int {
     let mut n = 0;
     for _ in variant.find_iter(seq) {
@@ -19,7 +19,7 @@ fn count_matches(seq: &str, variant: &Regexp) -> int {
     }
     n
 }
- 
+
 fn main() {
     let mut stdin =  std::io::stdio::stdin();
     let mut seq = stdin.read_to_str().unwrap();
@@ -47,7 +47,7 @@ fn main() {
     for (i, variant) in variant_strs.iter().enumerate() {
         println!("{} {}", variant, *counts.get(i));
     }
- 
+
     let substs = ~[
         (regexp!("B"), "(c|g|t)"),
         (regexp!("D"), "(a|g|t)"),

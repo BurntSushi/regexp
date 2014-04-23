@@ -13,8 +13,8 @@
 //
 // According to Russ Cox[1], a DFA performs better than an NFA, principally
 // because it reuses states previously computed by the machine *and* doesn't
-// keep track of capture groups. The drawback of a DFA (aside from its 
-// complexity) is that it can't accurately return the locations of submatches. 
+// keep track of capture groups. The drawback of a DFA (aside from its
+// complexity) is that it can't accurately return the locations of submatches.
 // The NFA *can* do that. (This is my understanding anyway.)
 //
 // Cox suggests that a DFA ought to be used to answer "does this match" and
@@ -122,7 +122,7 @@ impl<'r, 't> Nfa<'r, 't> {
         // simulating .*?
         // Make sure multi-line mode isn't enabled for it, otherwise we can't
         // drop the initial .*?
-        let prefix_anchor = 
+        let prefix_anchor =
             match *self.prog.insts.get(1) {
                 EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
                 _ => false,
@@ -138,10 +138,10 @@ impl<'r, 't> Nfa<'r, 't> {
                     break
                 }
 
-                // If there are no threads to try, then we'll have to start 
+                // If there are no threads to try, then we'll have to start
                 // over at the beginning of the regex.
-                // BUT, if there's a literal prefix for the program, try to 
-                // jump ahead quickly. If it can't be found, then we can bail 
+                // BUT, if there's a literal prefix for the program, try to
+                // jump ahead quickly. If it can't be found, then we can bail
                 // out early.
                 if self.prog.prefix.len() > 0 && clist.size == 0 {
                     let needle = self.prog.prefix.as_slice().as_bytes();
@@ -389,7 +389,7 @@ impl<'t> CharReader<'t> {
         }
     }
 
-    /// Does the same as `set`, except it always advances to the next 
+    /// Does the same as `set`, except it always advances to the next
     /// character in the input (and therefore does half as many UTF8 decodings).
     #[inline(always)]
     pub fn advance(&mut self) -> uint {

@@ -9,11 +9,11 @@ extern crate sync;
 
 use regexp::{NoExpand, Regexp};
 use sync::Arc;
- 
+
 fn replace(re: &Regexp, text: &str, rep: &str) -> ~str {
     re.replace_all(text, NoExpand(rep))
 }
- 
+
 fn count_matches(seq: &str, variant: &Regexp) -> int {
     let mut n = 0;
     for _ in variant.find_iter(seq) {
@@ -21,7 +21,7 @@ fn count_matches(seq: &str, variant: &Regexp) -> int {
     }
     n
 }
- 
+
 fn main() {
     let mut stdin =  std::io::stdio::stdin();
     let mut seq = stdin.read_to_str().unwrap();
@@ -30,7 +30,7 @@ fn main() {
     seq = regexp!(">[^\n]*\n|\n").replace_all(seq, NoExpand(""));
     let seq_arc = Arc::new(seq.clone()); // copy before it moves
     let clen = seq.len();
- 
+
     let mut seqlen = sync::Future::spawn(proc() {
         let substs = ~[
             (regexp!("B"), "(c|g|t)"),
@@ -71,7 +71,7 @@ fn main() {
             count_matches(*seq_arc_copy, &variant)
         }));
     }
- 
+
     for (i, variant) in variant_strs.iter().enumerate() {
         println!("{} {}", variant, counts.get_mut(i).get());
     }

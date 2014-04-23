@@ -151,7 +151,7 @@ impl BuildAst {
             _ => false,
         }
     }
-    
+
     fn unwrap(self) -> Result<~Ast, Error> {
         match self {
             Ast(x) => Ok(x),
@@ -846,7 +846,7 @@ impl<'a> Parser<'a> {
     }
 
     // build_from combines all AST elements starting at 'from' in the
-    // parser's stack using 'mk' to combine them. If any such element is not an 
+    // parser's stack using 'mk' to combine them. If any such element is not an
     // AST then it is popped off the stack and ignored.
     fn build_from(&mut self, from: uint, mk: |~Ast, ~Ast| -> Ast)
                  -> Result<~Ast, Error> {
@@ -915,7 +915,7 @@ impl<'a> Parser<'a> {
 }
 
 // Given an unordered collection of character ranges, combine_ranges returns
-// an ordered sequence of character ranges where no two ranges overlap. They 
+// an ordered sequence of character ranges where no two ranges overlap. They
 // are ordered from least to greatest (using start position).
 fn combine_ranges(unordered: Vec<(char, char)>) -> Vec<(char, char)> {
     // Returns true iff the two character classes overlap or share a boundary.
@@ -995,20 +995,20 @@ type NamedClasses = &'static [(&'static str, Class)];
 
 static ASCII_CLASSES: NamedClasses = &[
     // Classes must be in alphabetical order so that bsearch works.
-    // [:alnum:]      alphanumeric (== [0-9A-Za-z]) 
-    // [:alpha:]      alphabetic (== [A-Za-z]) 
-    // [:ascii:]      ASCII (== [\x00-\x7F]) 
-    // [:blank:]      blank (== [\t ]) 
-    // [:cntrl:]      control (== [\x00-\x1F\x7F]) 
-    // [:digit:]      digits (== [0-9]) 
+    // [:alnum:]      alphanumeric (== [0-9A-Za-z])
+    // [:alpha:]      alphabetic (== [A-Za-z])
+    // [:ascii:]      ASCII (== [\x00-\x7F])
+    // [:blank:]      blank (== [\t ])
+    // [:cntrl:]      control (== [\x00-\x1F\x7F])
+    // [:digit:]      digits (== [0-9])
     // [:graph:]      graphical (== [!-~])
-    // [:lower:]      lower case (== [a-z]) 
-    // [:print:]      printable (== [ -~] == [ [:graph:]]) 
-    // [:punct:]      punctuation (== [!-/:-@[-`{-~]) 
-    // [:space:]      whitespace (== [\t\n\v\f\r ]) 
-    // [:upper:]      upper case (== [A-Z]) 
-    // [:word:]       word characters (== [0-9A-Za-z_]) 
-    // [:xdigit:]     hex digit (== [0-9A-Fa-f]) 
+    // [:lower:]      lower case (== [a-z])
+    // [:print:]      printable (== [ -~] == [ [:graph:]])
+    // [:punct:]      punctuation (== [!-/:-@[-`{-~])
+    // [:space:]      whitespace (== [\t\n\v\f\r ])
+    // [:upper:]      upper case (== [A-Z])
+    // [:word:]       word characters (== [0-9A-Za-z_])
+    // [:xdigit:]     hex digit (== [0-9A-Fa-f])
     // Taken from: http://golang.org/pkg/regexp/syntax/
     ("alnum", &[('0', '9'), ('A', 'Z'), ('a', 'z')]),
     ("alpha", &[('A', 'Z'), ('a', 'z')]),
@@ -1030,12 +1030,12 @@ static ASCII_CLASSES: NamedClasses = &[
 #[allow(dead_code)]
 static PERL_CLASSES: NamedClasses = &[
     // Classes must be in alphabetical order so that bsearch works.
-    // \d             digits (== [0-9]) 
-    // \D             not digits (== [^0-9]) 
-    // \s             whitespace (== [\t\n\f\r ]) 
-    // \S             not whitespace (== [^\t\n\f\r ]) 
-    // \w             ASCII word characters (== [0-9A-Za-z_]) 
-    // \W             not ASCII word characters (== [^0-9A-Za-z_]) 
+    // \d             digits (== [0-9])
+    // \D             not digits (== [^0-9])
+    // \s             whitespace (== [\t\n\f\r ])
+    // \S             not whitespace (== [^\t\n\f\r ])
+    // \w             ASCII word characters (== [0-9A-Za-z_])
+    // \W             not ASCII word characters (== [^0-9A-Za-z_])
     // Taken from: http://golang.org/pkg/regexp/syntax/
     //
     // The negated classes are handled in the parser.

@@ -54,21 +54,21 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// Regexp is a compiled regular expression, represented as either a sequence
 /// of bytecode instructions (dynamic) or as a specialized Rust function
 /// (native). It can be used to search, split
-/// or replace text. All searching is done with an implicit `.*?` at the 
-/// beginning and end of an expression. To force an expression to match the 
-/// whole string (or a prefix or a suffix), you must use an anchor like `^` or 
+/// or replace text. All searching is done with an implicit `.*?` at the
+/// beginning and end of an expression. To force an expression to match the
+/// whole string (or a prefix or a suffix), you must use an anchor like `^` or
 /// `$` (or `\A` and `\z`).
 ///
 /// While this crate will handle Unicode strings (whether in the regular
-/// expression or in the search text), all positions returned are **byte 
-/// indices**. Every byte index is guaranteed to be at a UTF8 codepoint 
+/// expression or in the search text), all positions returned are **byte
+/// indices**. Every byte index is guaranteed to be at a UTF8 codepoint
 /// boundary.
 ///
-/// The lifetimes `'r` and `'t` in this crate correspond to the lifetime of a 
+/// The lifetimes `'r` and `'t` in this crate correspond to the lifetime of a
 /// compiled regular expression and text to search, respectively.
 ///
-/// The only methods that allocate new strings are the string replacement 
-/// methods. All other methods (searching and splitting) return borrowed 
+/// The only methods that allocate new strings are the string replacement
+/// methods. All other methods (searching and splitting) return borrowed
 /// pointers into the string given.
 ///
 /// # Examples
@@ -98,7 +98,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, Error> {
 /// }
 /// ```
 ///
-/// Given an incorrect regular expression, `regexp!` will cause the Rust 
+/// Given an incorrect regular expression, `regexp!` will cause the Rust
 /// compiler to produce a compile time error.
 /// Note that `regexp!` will compile the expression to native Rust code, which
 /// makes it much faster when searching text.
@@ -157,7 +157,7 @@ impl Regexp {
         has_match(&exec(self, Exists, text))
     }
 
-    /// Returns the start and end byte range of the leftmost-first match in 
+    /// Returns the start and end byte range of the leftmost-first match in
     /// `text`. If no match exists, then `None` is returned.
     ///
     /// Note that this should only be used if you want to discover the position
@@ -172,8 +172,8 @@ impl Regexp {
         }
     }
 
-    /// Returns an iterator for each successive non-overlapping match in 
-    /// `text`, returning the start and end byte indices with respect to 
+    /// Returns an iterator for each successive non-overlapping match in
+    /// `text`, returning the start and end byte indices with respect to
     /// `text`.
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
         FindMatches {
@@ -185,7 +185,7 @@ impl Regexp {
     }
 
     /// Returns the capture groups corresponding to the leftmost-first
-    /// match in `text`. Capture group `0` always corresponds to the entire 
+    /// match in `text`. Capture group `0` always corresponds to the entire
     /// match. If no match is found, then `None` is returned.
     ///
     /// You should only use `captures` if you need access to submatches.
@@ -211,7 +211,7 @@ impl Regexp {
 
     /// Returns an iterator of substrings of `text` delimited by a match
     /// of the regular expression.
-    /// Namely, each element of the iterator corresponds to text that *isn't* 
+    /// Namely, each element of the iterator corresponds to text that *isn't*
     /// matched by the regular expression.
     ///
     /// This method will *not* copy the text given.
@@ -236,10 +236,10 @@ impl Regexp {
         }
     }
 
-    /// Returns an iterator of at most `limit` substrings of `text` delimited 
+    /// Returns an iterator of at most `limit` substrings of `text` delimited
     /// by a match of the regular expression. (A `limit` of `0` will return no
     /// substrings.)
-    /// Namely, each element of the iterator corresponds to text that *isn't* 
+    /// Namely, each element of the iterator corresponds to text that *isn't*
     /// matched by the regular expression.
     /// The remainder of the string that is not split will be the last element
     /// in the iterator.
@@ -270,7 +270,7 @@ impl Regexp {
 
     /// Replaces the leftmost-first match with the replacement provided.
     /// The replacement can be a regular string (where `$N` and `$name` are
-    /// expanded to match capture groups) or a function that takes the matches' 
+    /// expanded to match capture groups) or a function that takes the matches'
     /// `Captures` and returns the replaced string.
     ///
     /// If no match is found, then a copy of the string is returned unchanged.
@@ -341,7 +341,7 @@ impl Regexp {
         self.replacen(text, 1, rep)
     }
 
-    /// Replaces all non-overlapping matches in `text` with the 
+    /// Replaces all non-overlapping matches in `text` with the
     /// replacement provided. This is the same as calling `replacen` with
     /// `limit` set to `0`.
     ///
@@ -351,7 +351,7 @@ impl Regexp {
         self.replacen(text, 0, rep)
     }
 
-    /// Replaces at most `limit` non-overlapping matches in `text` with the 
+    /// Replaces at most `limit` non-overlapping matches in `text` with the
     /// replacement provided. If `limit` is 0, then all non-overlapping matches
     /// are replaced.
     ///
@@ -524,7 +524,7 @@ impl<'t> Captures<'t> {
             return None
         }
 
-        let named = 
+        let named =
             if re.names.len() == 0 {
                 None
             } else {
@@ -549,7 +549,7 @@ impl<'t> Captures<'t> {
     /// Returns the start and end positions of the Nth capture group.
     /// Returns `None` if `i` is not a valid capture group or if the capture
     /// group did not match anything.
-    /// The positions returned are *always* byte indices with respect to the 
+    /// The positions returned are *always* byte indices with respect to the
     /// original string matched.
     pub fn pos(&self, i: uint) -> Option<(uint, uint)> {
         let (s, e) = (i * 2, i * 2 + 1);
@@ -561,7 +561,7 @@ impl<'t> Captures<'t> {
     }
 
     /// Returns the matched string for the capture group `i`.
-    /// If `i` isn't a valid capture group or didn't match anything, then the 
+    /// If `i` isn't a valid capture group or didn't match anything, then the
     /// empty string is returned.
     pub fn at(&self, i: uint) -> &'t str {
         match self.pos(i) {
@@ -573,7 +573,7 @@ impl<'t> Captures<'t> {
     }
 
     /// Returns the matched string for the capture group named `name`.
-    /// If `name` isn't a valid capture group or didn't match anything, then 
+    /// If `name` isn't a valid capture group or didn't match anything, then
     /// the empty string is returned.
     pub fn name(&self, name: &str) -> &'t str {
         match self.named {
@@ -593,7 +593,7 @@ impl<'t> Captures<'t> {
         SubCaptures { idx: 0, caps: self, }
     }
 
-    /// Creates an iterator of all the capture group positions in order of 
+    /// Creates an iterator of all the capture group positions in order of
     /// appearance in the regular expression. Positions are byte indices
     /// in terms of the original string matched.
     pub fn iter_pos(&'t self) -> SubCapturesPos<'t> {
@@ -605,7 +605,7 @@ impl<'t> Captures<'t> {
     ///
     /// `name` may be an integer corresponding to the index of the
     /// capture group (counted by order of opening parenthesis where `0` is the
-    /// entire match) or it can be a name (consisting of letters, digits or 
+    /// entire match) or it can be a name (consisting of letters, digits or
     /// underscores) corresponding to a named capture group.
     ///
     /// If `name` isn't a valid capture group (whether the name doesn't exist or
@@ -655,7 +655,7 @@ impl<'t> Iterator<&'t str> for SubCaptures<'t> {
     }
 }
 
-/// An iterator over capture group positions for a particular match of a 
+/// An iterator over capture group positions for a particular match of a
 /// regular expression.
 ///
 /// Positions are byte indices in terms of the original string matched.
@@ -678,7 +678,7 @@ impl<'t> Iterator<Option<(uint, uint)>> for SubCapturesPos<'t> {
 }
 
 /// An iterator that yields all non-overlapping capture groups matching a
-/// particular regular expression. The iterator stops when no more matches can 
+/// particular regular expression. The iterator stops when no more matches can
 /// be found.
 ///
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
@@ -720,7 +720,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
 /// An iterator over all non-overlapping matches for a particular string.
 ///
 /// The iterator yields a tuple of integers corresponding to the start and end
-/// of the match. The indices are byte offsets. The iterator stops when no more 
+/// of the match. The indices are byte offsets. The iterator stops when no more
 /// matches can be found.
 ///
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime

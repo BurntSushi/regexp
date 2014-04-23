@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! This crate provides the `regexp!` macro. Its use is documented in the 
+//! This crate provides the `regexp!` macro. Its use is documented in the
 //! `regexp` crate.
 
 #![crate_id = "regexp_macros#0.11-pre"]
@@ -61,7 +61,7 @@ pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
 ///    gratuitously. (If you're not sure, run the benchmarks. They will yell
 ///    at you if you do.)
 /// 2. The main `match instruction { ... }` expressions are replaced with more
-///    direct `match pc { ... }`. The generators can be found in 
+///    direct `match pc { ... }`. The generators can be found in
 ///    `step_insts` and `add_insts`.
 ///
 /// Other more minor changes include eliding code when possible (although this
@@ -121,7 +121,7 @@ impl<'a> NfaGen<'a> {
                 &None => quote_expr!(cx, None),
             }
         );
-        let prefix_anchor = 
+        let prefix_anchor =
             match self.prog.insts.as_slice()[1] {
                 EmptyBegin(flags) if flags & FLAG_MULTI == 0 => true,
                 _ => false,
