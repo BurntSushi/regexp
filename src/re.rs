@@ -285,7 +285,7 @@ impl Regexp {
     /// ```
     ///
     /// Here we name the capture groups, which we can access with the `name`
-    /// method. Note that the named capture groups are still accessible with 
+    /// method. Note that the named capture groups are still accessible with
     /// `at`.
     ///
     /// The `0`th capture group is always unnamed, so it must always be
@@ -703,7 +703,7 @@ impl<'t> Captures<'t> {
         match self.named {
             None => "",
             Some(ref h) => {
-                match h.find(&name.to_owned()) {
+                match h.find_equiv(&name) {
                     None => "",
                     Some(i) => self.at(*i),
                 }

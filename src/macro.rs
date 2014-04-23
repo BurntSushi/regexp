@@ -244,6 +244,13 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
         fn new(which: MatchKind) -> Threads {
             Threads {
                 which: which,
+                // These unsafe blocks are used for performance reasons, as it
+                // gives us a zero-cost initialization of a sparse set. The
+                // trick is described in more detail here:
+                // http://research.swtch.com/sparse
+                // The idea here is to avoid initializing threads that never
+                // need to be initialized, particularly for larger regexps with
+                // a lot of instructions.
                 queue: unsafe { ::std::mem::uninit() },
                 sparse: unsafe { ::std::mem::uninit() },
                 size: 0,
