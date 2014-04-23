@@ -30,6 +30,8 @@
 // perf improvement.
 //
 // AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
+//
+// [1] - http://swtch.com/~rsc/regexp/regexp3.html
 
 use std::cmp;
 use std::mem;
@@ -44,9 +46,14 @@ use super::parse::unicode::PERLW;
 
 pub type CaptureLocs = Vec<Option<uint>>;
 
+/// Indicates the type of match to be performed by the VM.
 pub enum MatchKind {
+    /// Only checks if a match exists or not. Does not return location.
     Exists,
+    /// Returns the start and end indices of the entire match in the input
+    /// given.
     Location,
+    /// Returns the start and end indices of each submatch in the input given.
     Submatches,
 }
 
@@ -82,9 +89,18 @@ struct Nfa<'r, 't> {
     chars: CharReader<'t>,
 }
 
+/// Indicates the next action to take after a single non-empty instruction
+/// is processed.
 pub enum StepState {
+    /// This is returned if and only if a Match instruction is reached and
+    /// we only care about the existence of a match. It instructs the VM to
+    /// quit early.
     StepMatchEarlyReturn,
+    /// Indicates that a match was found. Thus, the rest of the states in the
+    /// *current* queue should be dropped (i.e., leftmost-first semantics).
+    /// States in the "next" queue can still be processed.
     StepMatch,
+    /// No match was found. Continue with the next state in the queue.
     StepContinue,
 }
 
@@ -325,13 +341,19 @@ impl<'r, 't> Nfa<'r, 't> {
 /// character. This one-character lookahead is necessary for assertions that
 /// look one character before or after the current position.
 pub struct CharReader<'t> {
+    /// The previous character read. It is None only when processing the first
+    /// character of the input.
     pub prev: Option<char>,
+    /// The current character.
     pub cur: Option<char>,
     input: &'t str,
     next: uint,
 }
 
 impl<'t> CharReader<'t> {
+    /// Returns a new CharReader that advances through the input given.
+    /// Note that a CharReader has no knowledge of the range in which to search
+    /// the input.
     pub fn new(input: &'t str) -> CharReader<'t> {
         CharReader {
             prev: None,
@@ -341,8 +363,8 @@ impl<'t> CharReader<'t> {
        }
     }
 
-    // Sets the previous and current character given any arbitrary byte
-    // index (at a unicode codepoint boundary).
+    /// Sets the previous and current character given any arbitrary byte
+    /// index (at a unicode codepoint boundary).
     #[inline(always)]
     pub fn set(&mut self, ic: uint) -> uint {
         self.prev = None;
@@ -367,8 +389,8 @@ impl<'t> CharReader<'t> {
         }
     }
 
-    // advance does the same as set, except it always advances to the next 
-    // character in the input (and therefore does half as many UTF8 decodings).
+    /// Does the same as `set`, except it always advances to the next 
+    /// character in the input (and therefore does half as many UTF8 decodings).
     #[inline(always)]
     pub fn advance(&mut self) -> uint {
         self.prev = self.cur;
@@ -383,11 +405,18 @@ impl<'t> CharReader<'t> {
         self.next
     }
 
+    /// Returns true if and only if this is the beginning of the input
+    /// (ignoring the range of the input to search).
     #[inline(always)]
     pub fn is_begin(&self) -> bool { self.prev.is_none() }
+
+    /// Returns true if and only if this is the end of the input
+    /// (ignoring the range of the input to search).
     #[inline(always)]
     pub fn is_end(&self) -> bool { self.cur.is_none() }
 
+    /// Returns true if and only if the current position is a word boundary.
+    /// (Ignoring the range of the input to search.)
     pub fn is_word_boundary(&self) -> bool {
         if self.is_begin() {
             return is_word(self.cur)

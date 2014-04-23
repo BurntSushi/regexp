@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[cfg(not(stage1))]
 #[phase(syntax)]
 extern crate regexp_macros;
 
-#[cfg(dynamic)]
+// Dirty hack: During stage1, test dynamic regexps. For stage2, we test
+// native regexps.
+#[cfg(stage1)]
 macro_rules! regexp(
     ($re:expr) => (
         match ::regexp::Regexp::new($re) {
@@ -21,10 +24,6 @@ macro_rules! regexp(
     );
 )
 
-#[cfg(bench)]
 mod bench;
-#[cfg(not(bench), not(stage1))]
-mod macro;
-#[cfg(not(bench))]
 mod tests;
 

@@ -8,18 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! This crate provides the `regexp!` macro. Its use is documented in the 
+//! `regexp` crate.
+
 #![crate_id = "regexp_macros#0.11-pre"]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
+#![experimental]
 #![license = "MIT/ASL2"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://static.rust-lang.org/doc/master")]
 
 #![feature(macro_registrar, managed_boxes, quote)]
-
-//! This crate provides the `regexp!` macro. Its use is documented in the 
-//! `regexp` crate.
 
 extern crate regexp;
 extern crate syntax;
@@ -91,21 +92,21 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
     };
 
     let mut gen = NfaGen {
-        cx: cx, sp: sp, prog: prog,
+        cx: &*cx, sp: sp, prog: prog,
         names: re.names.clone(), original: re.original.clone(),
     };
     MacExpr::new(gen.code())
 }
 
-struct NfaGen<'a, 'c> {
-    cx: &'a mut ExtCtxt<'c>,
+struct NfaGen<'a> {
+    cx: &'a ExtCtxt<'a>,
     sp: codemap::Span,
     prog: Program,
     names: ~[Option<~str>],
     original: ~str,
 }
 
-impl<'a, 'c> NfaGen<'a, 'c> {
+impl<'a> NfaGen<'a> {
     fn code(&mut self) -> @ast::Expr {
         // Most or all of the following things are used in the quasiquoted
         // expression returned.
@@ -126,15 +127,15 @@ impl<'a, 'c> NfaGen<'a, 'c> {
                 _ => false,
             };
         let init_groups = self.vec_from_fn(num_cap_locs,
-                                           |cx| quote_expr!(&*cx, None));
+                                           |cx| quote_expr!(cx, None));
         let prefix_bytes = self.vec_expr(self.prog.prefix.as_slice().as_bytes(),
-                                         |cx, b| quote_expr!(&*cx, $b));
+                                         |cx, b| quote_expr!(cx, $b));
         let check_prefix = self.check_prefix();
         let step_insts = self.step_insts();
         let add_insts = self.add_insts();
         let regex = self.original.as_slice();
 
-        quote_expr!(&*self.cx, {
+        quote_expr!(self.cx, {
 fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             start: uint, end: uint) -> Vec<Option<uint>> {
     #![allow(unused_imports)]
@@ -324,14 +325,14 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     let nl = '\n';
                     let cond =
                         if flags & FLAG_MULTI > 0 {
-                            quote_expr!(&*self.cx,
+                            quote_expr!(self.cx,
                                 self.chars.is_begin()
                                 || self.chars.prev == Some($nl)
                             )
                         } else {
-                            quote_expr!(&*self.cx, self.chars.is_begin())
+                            quote_expr!(self.cx, self.chars.is_begin())
                         };
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         if $cond { self.add(nlist, $nextpc, &mut *groups) }
                     })
@@ -340,14 +341,14 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     let nl = '\n';
                     let cond =
                         if flags & FLAG_MULTI > 0 {
-                            quote_expr!(&*self.cx,
+                            quote_expr!(self.cx,
                                 self.chars.is_end()
                                 || self.chars.cur == Some($nl)
                             )
                         } else {
-                            quote_expr!(&*self.cx, self.chars.is_end())
+                            quote_expr!(self.cx, self.chars.is_end())
                         };
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         if $cond { self.add(nlist, $nextpc, &mut *groups) }
                     })
@@ -355,64 +356,61 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                 EmptyWordBoundary(flags) => {
                     let cond =
                         if flags & FLAG_NEGATED > 0 {
-                            quote_expr!(&*self.cx, !self.chars.is_word_boundary())
+                            quote_expr!(self.cx, !self.chars.is_word_boundary())
                         } else {
-                            quote_expr!(&*self.cx, self.chars.is_word_boundary())
+                            quote_expr!(self.cx, self.chars.is_word_boundary())
                         };
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         if $cond { self.add(nlist, $nextpc, &mut *groups) }
                     })
                 }
                 Save(slot) => {
+                    let save = quote_expr!(self.cx, {
+                        let old = groups[$slot];
+                        groups[$slot] = Some(self.ic);
+                        self.add(nlist, $nextpc, &mut *groups);
+                        groups[$slot] = old;
+                    });
+                    let add = quote_expr!(self.cx, {
+                        self.add(nlist, $nextpc, &mut *groups);
+                    });
                     // If this is saving a submatch location but we request
                     // existence or only full match location, then we can skip
                     // right over it every time.
                     if slot > 1 {
-                        quote_expr!(&*self.cx, {
+                        quote_expr!(self.cx, {
                             nlist.add_empty($pc);
                             match self.which {
-                                Submatches => {
-                                    let old = groups[$slot];
-                                    groups[$slot] = Some(self.ic);
-                                    self.add(nlist, $nextpc, &mut *groups);
-                                    groups[$slot] = old;
-                                }
-                                Exists | Location =>
-                                    self.add(nlist, $nextpc, &mut *groups),
+                                Submatches => $save,
+                                Exists | Location => $add,
                             }
                         })
                     } else {
-                        quote_expr!(&*self.cx, {
+                        quote_expr!(self.cx, {
                             nlist.add_empty($pc);
                             match self.which {
-                                Submatches | Location => {
-                                    let old = groups[$slot];
-                                    groups[$slot] = Some(self.ic);
-                                    self.add(nlist, $nextpc, &mut *groups);
-                                    groups[$slot] = old;
-                                }
-                                Exists =>
-                                    self.add(nlist, $nextpc, &mut *groups),
+                                Submatches | Location => $save,
+                                Exists => $add,
                             }
                         })
                     }
                 }
                 Jump(to) => {
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         self.add(nlist, $to, &mut *groups);
                     })
                 }
                 Split(x, y) => {
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         nlist.add_empty($pc);
                         self.add(nlist, $x, &mut *groups);
                         self.add(nlist, $y, &mut *groups);
                     })
                 }
                 // For Match, OneChar, CharClass, Any
-                _ => quote_expr!(&*self.cx, nlist.add($pc, &*groups)),
+                _ => quote_expr!(self.cx, nlist.add($pc, &*groups)),
             };
             self.arm_inst(pc, body)
         }).collect::<Vec<ast::Arm>>();
@@ -427,7 +425,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             let nextpc = pc + 1;
             let body = match *inst {
                 Match => {
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         match self.which {
                             Exists => {
                                 return StepMatchEarlyReturn
@@ -447,14 +445,14 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                 OneChar(c, flags) => {
                     if flags & FLAG_NOCASE > 0 {
                         let upc = c.to_uppercase();
-                        quote_expr!(&*self.cx, {
+                        quote_expr!(self.cx, {
                             let upc = self.chars.prev.map(|c| c.to_uppercase());
                             if upc == Some($upc) {
                                 self.add(nlist, $nextpc, caps);
                             }
                         })
                     } else {
-                        quote_expr!(&*self.cx, {
+                        quote_expr!(self.cx, {
                             if self.chars.prev == Some($c) {
                                 self.add(nlist, $nextpc, caps);
                             }
@@ -466,18 +464,18 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     let casei = flags & FLAG_NOCASE > 0;
                     let get_char =
                         if casei {
-                            quote_expr!(&*self.cx, self.chars.prev.unwrap().to_uppercase())
+                            quote_expr!(self.cx, self.chars.prev.unwrap().to_uppercase())
                         } else {
-                            quote_expr!(&*self.cx, self.chars.prev.unwrap())
+                            quote_expr!(self.cx, self.chars.prev.unwrap())
                         };
                     let negcond =
                         if negate {
-                            quote_expr!(&*self.cx, !found)
+                            quote_expr!(self.cx, !found)
                         } else {
-                            quote_expr!(&*self.cx, found)
+                            quote_expr!(self.cx, found)
                         };
                     let mranges = self.match_class(casei, ranges.as_slice());
-                    quote_expr!(&*self.cx, {
+                    quote_expr!(self.cx, {
                         if self.chars.prev.is_some() {
                             let c = $get_char;
                             let found = $mranges;
@@ -489,10 +487,10 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                 }
                 Any(flags) => {
                     if flags & FLAG_DOTNL > 0 {
-                        quote_expr!(&*self.cx, self.add(nlist, $nextpc, caps))
+                        quote_expr!(self.cx, self.add(nlist, $nextpc, caps))
                     } else {
                         let nl = '\n'; // no char lits allowed? wtf?
-                        quote_expr!(&*self.cx, {
+                        quote_expr!(self.cx, {
                             if self.chars.prev != Some($nl) {
                                 self.add(nlist, $nextpc, caps)
                             }
@@ -500,7 +498,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     }
                 }
                 // EmptyBegin, EmptyEnd, EmptyWordBoundary, Save, Jump, Split
-                _ => quote_expr!(&*self.cx, {}),
+                _ => quote_expr!(self.cx, {}),
             };
             self.arm_inst(pc, body)
         }).collect::<Vec<ast::Arm>>();
@@ -521,17 +519,17 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                 pats: vec!(@ast::Pat{
                     id: ast::DUMMY_NODE_ID,
                     span: self.sp,
-                    node: ast::PatRange(quote_expr!(&*self.cx, $start),
-                                        quote_expr!(&*self.cx, $end)),
+                    node: ast::PatRange(quote_expr!(self.cx, $start),
+                                        quote_expr!(self.cx, $end)),
                 }),
                 guard: None,
-                body: quote_expr!(&*self.cx, true),
+                body: quote_expr!(self.cx, true),
             }
         }).collect::<Vec<ast::Arm>>();
 
-        arms.push(self.wild_arm_expr(quote_expr!(&*self.cx, false)));
+        arms.push(self.wild_arm_expr(quote_expr!(self.cx, false)));
 
-        let match_on = quote_expr!(&*self.cx, c);
+        let match_on = quote_expr!(self.cx, c);
         self.dummy_expr(ast::ExprMatch(match_on, arms))
     }
 
@@ -540,9 +538,9 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     // Otherwise, a no-op is returned.
     fn check_prefix(&self) -> @ast::Expr {
         if self.prog.prefix.len() == 0 {
-            quote_expr!(&*self.cx, {})
+            quote_expr!(self.cx, {})
         } else {
-            quote_expr!(&*self.cx,
+            quote_expr!(self.cx,
                 if clist.size == 0 {
                     let haystack = self.input.as_bytes().slice_from(self.ic);
                     match find_prefix(prefix_bytes, haystack) {
@@ -563,8 +561,8 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     // never be used, but is added to satisfy the compiler complaining about
     // non-exhaustive patterns.
     fn match_insts(&self, mut arms: Vec<ast::Arm>) -> @ast::Expr {
-        let mat_pc = quote_expr!(&*self.cx, pc);
-        arms.push(self.wild_arm_expr(quote_expr!(&*self.cx, {})));
+        let mat_pc = quote_expr!(self.cx, pc);
+        arms.push(self.wild_arm_expr(quote_expr!(self.cx, {})));
         self.dummy_expr(ast::ExprMatch(mat_pc, arms))
     }
 
@@ -575,7 +573,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             pats: vec!(@ast::Pat{
                 id: ast::DUMMY_NODE_ID,
                 span: self.sp,
-                node: ast::PatLit(quote_expr!(&*self.cx, $pc)),
+                node: ast::PatLit(quote_expr!(self.cx, $pc)),
             }),
             guard: None,
             body: body,
@@ -612,7 +610,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             exprs.push(to_expr(self.cx, x))
         }
         let vec_exprs = self.dummy_expr(ast::ExprVec(exprs));
-        quote_expr!(&*self.cx, $vec_exprs)
+        quote_expr!(self.cx, $vec_exprs)
     }
 
     // Creates an expression with a dummy node ID given an underlying

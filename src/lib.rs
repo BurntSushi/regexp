@@ -8,14 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_id = "regexp#0.11-pre"]
-#![crate_type = "rlib"]
-#![crate_type = "dylib"]
-#![license = "MIT/ASL2"]
-#![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
-       html_root_url = "http://static.rust-lang.org/doc/master")]
-
 //! This crate provides a native implementation of regular expressions that is
 //! heavily based on RE2 both in syntax and in implementation. Notably,
 //! backreferences and arbitrary lookahead/lookbehind assertions are not
@@ -354,7 +346,17 @@
 //! characters in the search text and `m` is the number of instructions in a 
 //! compiled expression.
 
+#![crate_id = "regexp#0.11-pre"]
+#![crate_type = "rlib"]
+#![crate_type = "dylib"]
+#![experimental]
+#![license = "MIT/ASL2"]
+#![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
+       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+       html_root_url = "http://static.rust-lang.org/doc/master")]
+
 #![feature(macro_rules, phase)]
+#![deny(missing_doc)]
 
 extern crate collections;
 #[cfg(test)]

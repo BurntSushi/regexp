@@ -79,15 +79,16 @@ pub enum Inst {
 /// (This makes it convenient and efficient for use with the `regexp!` macro.)
 #[deriving(Clone)]
 pub struct Program {
-    // A sequence of instructions.
+    /// A sequence of instructions.
     pub insts: Vec<Inst>,
-    // If the regular expression requires a literal prefix in order to have a
-    // match, that prefix is stored here. (It's used in the VM to implement
-    // an optimization.)
+    /// If the regular expression requires a literal prefix in order to have a
+    /// match, that prefix is stored here. (It's used in the VM to implement
+    /// an optimization.)
     pub prefix: ~str,
 }
 
 impl Program {
+    /// Compiles a Regexp given its AST.
     pub fn new(ast: ~parse::Ast) -> (Program, ~[Option<~str>]) {
         let mut c = Compiler {
             insts: Vec::with_capacity(100),

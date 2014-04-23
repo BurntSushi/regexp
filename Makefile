@@ -9,7 +9,7 @@ REGEXP_LIB_FILES = src/compile.rs src/lib.rs src/parse.rs src/re.rs \
 									 src/unicode.rs src/vm.rs
 REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
 REGEXP_MACRO_LIB_FILES = src/macro.rs
-REGEXP_TEST_FILES = src/test/bench.rs src/test/macro.rs src/test/matches.rs \
+REGEXP_TEST_FILES = src/test/bench.rs src/test/matches.rs \
 									  src/test/mod.rs src/test/tests.rs
 MOZILLA_RUST ?= $(HOME)/clones/rust
 REGEXP_DYN_FLAGS =
@@ -81,6 +81,8 @@ push:
 	git push github master
 
 mozilla:
+	mkdir -p $(MOZILLA_RUST)/src/libregexp
+	mkdir -p $(MOZILLA_RUST)/src/libregexp_macros
 	rm -rf $(MOZILLA_RUST)/src/libregexp/*
 	cp -a ./src/* $(MOZILLA_RUST)/src/libregexp/
 	rm $(MOZILLA_RUST)/src/libregexp/macro.rs
