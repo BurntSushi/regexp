@@ -1,5 +1,15 @@
-// Originally written by JustAPerson (https://github.com/JustAPerson).
-// Modified by Andrew Gallant (https://github.com/BurntSushi).
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+// ignore-stage1
+// ignore-cross-compile #12102
 
 #![feature(macro_rules, phase)]
 
@@ -10,10 +20,6 @@ extern crate sync;
 use regexp::{NoExpand, Regexp};
 use sync::Arc;
 
-fn replace(re: &Regexp, text: &str, rep: &str) -> ~str {
-    re.replace_all(text, NoExpand(rep))
-}
-
 fn count_matches(seq: &str, variant: &Regexp) -> int {
     let mut n = 0;
     for _ in variant.find_iter(seq) {
@@ -23,8 +29,12 @@ fn count_matches(seq: &str, variant: &Regexp) -> int {
 }
 
 fn main() {
-    let mut stdin =  std::io::stdio::stdin();
-    let mut seq = stdin.read_to_str().unwrap();
+    let mut seq = if std::os::getenv("RUST_BENCH").is_some() {
+        let fd = std::io::File::open(&Path::new("shootout-k-nucleotide.data"));
+        std::io::BufferedReader::new(fd).read_to_str().unwrap()
+    } else {
+        std::io::stdin().read_to_str().unwrap()
+    };
     let ilen = seq.len();
 
     seq = regexp!(">[^\n]*\n|\n").replace_all(seq, NoExpand(""));
@@ -47,7 +57,7 @@ fn main() {
         ];
         let mut seq = seq;
         for (re, replacement) in substs.move_iter() {
-            seq = replace(&re, seq, replacement)
+            seq = re.replace_all(seq, NoExpand(replacement));
         }
         seq.len()
     });

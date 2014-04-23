@@ -88,4 +88,5 @@ mozilla:
 	rm $(MOZILLA_RUST)/src/libregexp/macro.rs
 	cp ./src/macro.rs $(MOZILLA_RUST)/src/libregexp_macros/lib.rs
 	cp *.py $(MOZILLA_RUST)/src/etc/
+	cp ./benchmark/regex-dna/regex-dna.rs $(MOZILLA_RUST)/src/test/bench/shootout-regex-dna.rs
 
