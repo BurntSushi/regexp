@@ -13,7 +13,6 @@ use std::cast;
 use std::fmt;
 use std::from_str::from_str;
 use std::str::{MaybeOwned, Owned, Slice};
-use std::str::raw;
 
 use std::mem;
 use std::ptr;
@@ -155,10 +154,23 @@ impl Regexp {
         let (prog, names) = Program::new(ast);
         Ok(Regexp { original: re.to_owned(), names: names, p: Dynamic(prog) })
     }
-}
 
-impl Regexp {
     /// Returns true if and only if the regexp matches the string given.
+    ///
+    /// # Example
+    ///
+    /// Test if some text contains at least one word with exactly 13
+    /// characters:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # fn main() {
+    /// let text = "I categorically deny having triskaidekaphobia.";
+    /// let matched = regexp!(r"\b\w{13}\b").is_match(text);
+    /// assert!(matched);
+    /// # }
+    /// ```
     pub fn is_match(&self, text: &str) -> bool {
         has_match(&exec(self, Exists, text))
     }
@@ -169,6 +181,21 @@ impl Regexp {
     /// Note that this should only be used if you want to discover the position
     /// of the match. Testing the existence of a match is faster if you use
     /// `is_match`.
+    ///
+    /// # Example
+    ///
+    /// Find the start and end location of every word with exactly 13
+    /// characters:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # fn main() {
+    /// let text = "I categorically deny having triskaidekaphobia.";
+    /// let pos = regexp!(r"\b\w{13}\b").find(text);
+    /// assert_eq!(pos, Some((2, 15)));
+    /// # }
+    /// ```
     pub fn find(&self, text: &str) -> Option<(uint, uint)> {
         let caps = exec(self, Location, text);
         if has_match(&caps) {
@@ -181,6 +208,27 @@ impl Regexp {
     /// Returns an iterator for each successive non-overlapping match in
     /// `text`, returning the start and end byte indices with respect to
     /// `text`.
+    ///
+    /// # Example
+    ///
+    /// Find the start and end location of the first word with exactly 13
+    /// characters:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # fn main() {
+    /// let text = "Retroactively relinquishing remunerations is reprehensible.";
+    /// for pos in regexp!(r"\b\w{13}\b").find_iter(text) {
+    ///     println!("{}", pos);
+    /// }
+    /// // Output:
+    /// // (0, 13)
+    /// // (14, 27)
+    /// // (28, 41)
+    /// // (45, 58)
+    /// # }
+    /// ```
     pub fn find_iter<'r, 't>(&'r self, text: &'t str) -> FindMatches<'r, 't> {
         FindMatches {
             re: self,
@@ -197,6 +245,51 @@ impl Regexp {
     /// You should only use `captures` if you need access to submatches.
     /// Otherwise, `find` is faster for discovering the location of the overall
     /// match.
+    ///
+    /// # Examples
+    ///
+    /// Say you have some text with movie names and their release years,
+    /// like "'Citizen Kane' (1941)". It'd be nice if we could search for text
+    /// looking like that, while also extracting the movie name and its release
+    /// year separately.
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # fn main() {
+    /// let re = regexp!(r"'([^']+)'\s+\((\d{4})\)");
+    /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
+    /// let caps = re.captures(text).unwrap();
+    /// assert_eq!(caps.at(1), "Citizen Kane");
+    /// assert_eq!(caps.at(2), "1941");
+    /// assert_eq!(caps.at(0), "'Citizen Kane' (1941)");
+    /// # }
+    /// ```
+    ///
+    /// Note that the full match is at capture group `0`. Each subsequent
+    /// capture group is indexed by the order of its opening `(`.
+    ///
+    /// We can make this example a bit clearer by using *named* capture groups:
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # fn main() {
+    /// let re = regexp!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
+    /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
+    /// let caps = re.captures(text).unwrap();
+    /// assert_eq!(caps.name("title"), "Citizen Kane");
+    /// assert_eq!(caps.name("year"), "1941");
+    /// assert_eq!(caps.at(0), "'Citizen Kane' (1941)");
+    /// # }
+    /// ```
+    ///
+    /// Here we name the capture groups, which we can access with the `name`
+    /// method. Note that the named capture groups are still accessible with 
+    /// `at`.
+    ///
+    /// The `0`th capture group is always unnamed, so it must always be
+    /// accessed with `at(0)`.
     pub fn captures<'t>(&self, text: &'t str) -> Option<Captures<'t>> {
         let caps = exec(self, Submatches, text);
         Captures::new(self, text, caps)
@@ -205,6 +298,27 @@ impl Regexp {
     /// Returns an iterator over all the non-overlapping capture groups matched
     /// in `text`. This is operationally the same as `find_iter` (except it
     /// yields information about submatches).
+    ///
+    /// # Example
+    ///
+    /// We can use this to find all movie titles and their release years in
+    /// some text, where the movie is formatted like "'Title' (xxxx)":
+    ///
+    /// ```rust
+    /// # #![feature(phase)]
+    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # fn main() {
+    /// let re = regexp!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
+    /// let text = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
+    /// for caps in re.captures_iter(text) {
+    ///     println!("Movie: {}, Released: {}", caps.name("title"), caps.name("year"));
+    /// }
+    /// // Output:
+    /// // Movie: Citizen Kane, Released: 1941
+    /// // Movie: The Wizard of Oz, Released: 1939
+    /// // Movie: M, Released: 1931
+    /// # }
+    /// ```
     pub fn captures_iter<'r, 't>(&'r self, text: &'t str)
                                 -> FindCaptures<'r, 't> {
         FindCaptures {
@@ -337,7 +451,9 @@ impl Regexp {
     /// ```rust
     /// # #![feature(phase)]
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-    /// # use regexp::NoExpand; fn main() {
+    /// # fn main() {
+    /// use regexp::NoExpand;
+    ///
     /// let re = regexp!(r"(?P<last>[^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
     /// assert_eq!(result, ~"$2 $last");
@@ -364,7 +480,7 @@ impl Regexp {
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement string.
     pub fn replacen<R: Replacer>
-                   (&self, text: &str, limit: uint, rep: R) -> ~str {
+                   (&self, text: &str, limit: uint, mut rep: R) -> ~str {
         let mut new = StrBuf::with_capacity(text.len());
         let mut last_match = 0u;
         let mut i = 0;
@@ -377,11 +493,11 @@ impl Regexp {
             i += 1;
 
             let (s, e) = cap.pos(0).unwrap(); // captures only reports matches
-            new.push_str(unsafe { raw::slice_bytes(text, last_match, s) });
+            new.push_str(text.slice(last_match, s));
             new.push_str(rep.reg_replace(&cap).as_slice());
             last_match = e;
         }
-        new.push_str(unsafe { raw::slice_bytes(text, last_match, text.len()) });
+        new.push_str(text.slice(last_match, text.len()));
 
         // The lengths we will go to avoid allocation.
         // This has a *dramatic* affect on the regex-dna benchmark (and indeed,
@@ -394,6 +510,8 @@ impl Regexp {
         // shortened since we know we're dealing with bytes. The key is that
         // we already have a Vec<u8>, so there's no reason to re-collect it
         // (which is what from_iter currently does).
+        //
+        // FIXME #12938: This code *should* be `new.into_owned()`.
         let mut xs = new.into_bytes();
         let size = mem::size_of::<RawVec<()>>().checked_add(&xs.len());
         let size = size.expect("overflow in replacen()");
@@ -425,24 +543,24 @@ pub trait Replacer {
     ///
     /// The `'a` lifetime refers to the lifetime of a borrowed string when
     /// a new owned string isn't needed (e.g., for `NoExpand`).
-    fn reg_replace<'a>(&'a self, caps: &Captures) -> MaybeOwned<'a>;
+    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> MaybeOwned<'a>;
 }
 
 impl<'t> Replacer for NoExpand<'t> {
-    fn reg_replace<'a>(&'a self, _: &Captures) -> MaybeOwned<'a> {
+    fn reg_replace<'a>(&'a mut self, _: &Captures) -> MaybeOwned<'a> {
         let NoExpand(s) = *self;
         Slice(s)
     }
 }
 
 impl<'t> Replacer for &'t str {
-    fn reg_replace<'a>(&'a self, caps: &Captures) -> MaybeOwned<'a> {
+    fn reg_replace<'a>(&'a mut self, caps: &Captures) -> MaybeOwned<'a> {
         Owned(caps.expand(*self))
     }
 }
 
 impl<'a> Replacer for |&Captures|: 'a -> ~str {
-    fn reg_replace<'r>(&'r self, caps: &Captures) -> MaybeOwned<'r> {
+    fn reg_replace<'r>(&'r mut self, caps: &Captures) -> MaybeOwned<'r> {
         Owned((*self)(caps))
     }
 }

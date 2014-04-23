@@ -4,36 +4,6 @@ Rust
 rustc --opt-level=3 -Z lto -g --test --cfg bench src/lib.rs -o ./build/bench
 ./build/bench --bench
 
-literal                                 129 ns/iter (+/- 2)
-not_literal                             900 ns/iter (+/- 7)
-match_class                            1325 ns/iter (+/- 10)
-match_class_in_range                   1262 ns/iter (+/- 10)
-replace_all                            1237 ns/iter (+/- 18)
-anchored_literal_short_non_match        428 ns/iter (+/- 2)
-anchored_literal_long_non_match        5815 ns/iter (+/- 58)
-anchored_literal_short_match            154 ns/iter (+/- 0)
-anchored_literal_long_match             139 ns/iter (+/- 1)
-one_pass_short_a                       1044 ns/iter (+/- 10)
-one_pass_short_a_not                   1409 ns/iter (+/- 19)
-one_pass_short_b                        767 ns/iter (+/- 8)
-one_pass_short_b_not                   1030 ns/iter (+/- 16)
-one_pass_long_prefix                    523 ns/iter (+/- 4)
-one_pass_long_prefix_not                510 ns/iter (+/- 12)
-easy0_32                                136 ns/iter (+/- 2) = 235 MB/s
-easy0_1K                               1366 ns/iter (+/- 118) = 749 MB/s
-easy0_32K                             41048 ns/iter (+/- 789) = 798 MB/s
-easy1_32                                169 ns/iter (+/- 104) = 189 MB/s
-easy1_1K                               1551 ns/iter (+/- 471) = 660 MB/s
-easy1_32K                             47432 ns/iter (+/- 3134) = 690 MB/s
-medium_32                               608 ns/iter (+/- 27) = 52 MB/s
-medium_1K                             14912 ns/iter (+/- 252) = 68 MB/s
-medium_32K                           472955 ns/iter (+/- 6502) = 69 MB/s
-hard_32                                1159 ns/iter (+/- 43) = 27 MB/s
-hard_1K                               32916 ns/iter (+/- 802) = 31 MB/s
-hard_32K                            1046677 ns/iter (+/- 14354) = 31 MB/s
-no_exponential                       280041 ns/iter (+/- 7137)
-
-
 literal                                 125 ns/iter (+/- 0)
 not_literal                             944 ns/iter (+/- 29)
 match_class                            1259 ns/iter (+/- 25)

@@ -206,16 +206,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
             match self.which {
                 Exists if matched     => vec![Some(0u), Some(0u)],
                 Exists                => vec![None, None],
-                Location | Submatches => {
-                    let elts = groups.len();
-                    let mut v = Vec::with_capacity(elts);
-                    unsafe {
-                        v.set_len(elts);
-                        ::std::ptr::copy_nonoverlapping_memory(
-                            v.as_mut_ptr(), groups.as_ptr(), elts);
-                    }
-                    v
-                }
+                Location | Submatches => groups.iter().map(|x| *x).collect(),
             }
         }
 
@@ -270,7 +261,9 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                     t.groups[1] = groups[1];
                 }
                 Submatches => {
-                    unsafe { t.groups.copy_memory(groups.as_slice()) }
+                    for (slot, val) in t.groups.mut_iter().zip(groups.iter()) {
+                        *slot = *val;
+                    }
                 }
             }
             self.sparse[pc] = self.size;
@@ -436,7 +429,9 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                                 return StepMatch
                             }
                             Submatches => {
-                                unsafe { groups.copy_memory(caps.as_slice()) }
+                                for (slot, val) in groups.mut_iter().zip(caps.iter()) {
+                                    *slot = *val;
+                                }
                                 return StepMatch
                             }
                         }

@@ -206,7 +206,9 @@ impl<'r, 't> Nfa<'r, 't> {
                         return StepMatch
                     }
                     Submatches => {
-                        unsafe { groups.copy_memory(caps) }
+                        for (slot, val) in groups.mut_iter().zip(caps.iter()) {
+                            *slot = *val;
+                        }
                         return StepMatch
                     }
                 }
@@ -469,8 +471,10 @@ impl Threads {
                 *t.groups.get_mut(0) = groups[0];
                 *t.groups.get_mut(1) = groups[1];
             }
-            (false, Submatches) => unsafe {
-                t.groups.as_mut_slice().copy_memory(groups)
+            (false, Submatches) => {
+                for (slot, val) in t.groups.mut_iter().zip(groups.iter()) {
+                    *slot = *val;
+                }
             }
         }
         *self.sparse.get_mut(pc) = self.size;
