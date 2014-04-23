@@ -1,13 +1,13 @@
 RUSTC ?= rustc
 RUSTDOC ?= rustdoc
-BUILD_DIR ?= ./build/
+BUILD_DIR ?= ./build
 RUST_PATH ?= $(BUILD_DIR)
 RUSTFLAGS ?= --opt-level=3
 RUSTTESTFLAGS ?= 
-REGEXP_LIB = $(BUILD_DIR)/.libregexp.timestamp
+REGEXP_LIB ?= $(BUILD_DIR)/.libregexp.timestamp
 REGEXP_LIB_FILES = src/compile.rs src/lib.rs src/parse.rs src/re.rs \
 									 src/unicode.rs src/vm.rs
-REGEXP_MACRO_LIB = $(BUILD_DIR)/.libregexp_macros.timestamp
+REGEXP_MACRO_LIB ?= $(BUILD_DIR)/.libregexp_macros.timestamp
 REGEXP_MACRO_LIB_FILES = src/macro.rs
 REGEXP_TEST_FILES = src/test/bench.rs src/test/matches.rs \
 									  src/test/mod.rs src/test/tests.rs
@@ -34,10 +34,10 @@ $(REGEXP_MACRO_LIB): $(REGEXP_LIB) $(REGEXP_MACRO_LIB_FILES)
 	@touch $(REGEXP_MACRO_LIB)
 
 match-tests:
-	./regexp-match-tests ./src/testdata/*.dat > ./src/test/matches.rs
+	./regexp-match-tests.py ./src/testdata/*.dat > ./src/test/matches.rs
 
 unicode-tables:
-	./regexp-unicode-tables > ./src/unicode.rs
+	./regexp-unicode-tables.py > ./src/unicode.rs
 
 docs: $(REGEXP_LIB_FILES) $(REGEXP_MACRO_LIB_FILES)
 	rm -rf doc
@@ -74,7 +74,7 @@ ctags:
 	ctags --recurse --options=ctags.rust --languages=Rust
 
 clean:
-	rm -rf ./build/* ./build/.*.timestamp
+	rm -f $(BUILD_DIR)/.*.timestamp $(BUILD_DIR)/*
 
 push:
 	git push origin master
