@@ -366,7 +366,7 @@ extern crate rand;
 
 // During tests, this links with the `regexp` crate so that the `regexp!` macro
 // can be tested.
-#[cfg(test, not(stage1))]
+#[cfg(test)]
 extern crate regexp;
 
 pub use parse::Error;
@@ -401,17 +401,17 @@ pub mod native {
     //
     // On the bright side, `rustdoc` lets us hide this from the public API
     // documentation.
-    pub use super::compile::{
+    pub use compile::{
         Program,
         OneChar, CharClass, Any, Save, Jump, Split,
         Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     };
-    pub use super::parse::{
+    pub use parse::{
         FLAG_EMPTY, FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL,
         FLAG_SWAP_GREED, FLAG_NEGATED,
     };
-    pub use super::re::{Dynamic, Native};
-    pub use super::vm::{
+    pub use re::{Dynamic, Native};
+    pub use vm::{
         MatchKind, Exists, Location, Submatches,
         StepState, StepMatchEarlyReturn, StepMatch, StepContinue,
         CharReader, find_prefix,
