@@ -87,4 +87,5 @@ mozilla:
 	cp -a ./src/* $(MOZILLA_RUST)/src/libregexp/
 	rm $(MOZILLA_RUST)/src/libregexp/macro.rs
 	cp ./src/macro.rs $(MOZILLA_RUST)/src/libregexp_macros/lib.rs
+	cp *.py $(MOZILLA_RUST)/src/etc/
 

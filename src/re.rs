@@ -73,7 +73,7 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 ///
 /// # Examples
 ///
-/// Find the location of a phone number:
+/// Find the location of a US phone number:
 ///
 /// ```rust
 /// # use regexp::Regexp;
@@ -135,8 +135,11 @@ impl Clone for MaybeNative {
 }
 
 impl Regexp {
-    /// Creates a new compiled regular expression. Once compiled, it can be
+    /// Compiles a dynamic regular expression. Once compiled, it can be
     /// used repeatedly to search, split or replace text in a string.
+    ///
+    /// When possible, you should prefer the `regexp!` macro since it is
+    /// safer and always faster.
     ///
     /// If an invalid expression is given, then an error is returned.
     pub fn new(re: &str) -> Result<Regexp, parse::Error> {
@@ -147,11 +150,6 @@ impl Regexp {
 }
 
 impl Regexp {
-    /// Returns the original string used to construct this regular expression.
-    pub fn to_str<'r>(&'r self) -> &'r str {
-        self.original.as_slice()
-    }
-
     /// Returns true if and only if the regexp matches the string given.
     pub fn is_match(&self, text: &str) -> bool {
         has_match(&exec(self, Exists, text))
@@ -400,6 +398,11 @@ impl Regexp {
             xs.set_len(0);
             cast::transmute(ret)
         }
+    }
+
+    /// Returns the original string used to construct this regular expression.
+    pub fn to_str<'r>(&'r self) -> &'r str {
+        self.original.as_slice()
     }
 }
 

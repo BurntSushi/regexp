@@ -80,6 +80,12 @@
 //! Secondly, the `regexp` crate *must* be linked with the name `regexp` since
 //! the generated code depends on finding symbols in the `regexp` crate.
 //!
+//! The only downside of using the `regexp!` macro is that it can increase the
+//! size of your program's binary since it generates specialized Rust code.
+//! The extra size probably won't be significant for a small number of
+//! expressions, but 100+ calls to `regexp!` will probably result in a
+//! noticeably bigger binary.
+//!
 //! # Example: iterating over capture groups
 //!
 //! This crate provides convenient iterators for matching an expression
@@ -234,19 +240,19 @@
 //! ## Empty matches
 //!
 //! <pre class="rust">
-//! ^     the beginning of text
-//! $     the end of text
+//! ^     the beginning of text (or start-of-line with multi-line mode)
+//! $     the end of text (or end-of-line with multi-line mode)
 //! \A    only the beginning of text (even with multi-line mode enabled)
 //! \z    only the end of text (even with multi-line mode enabled)
 //! \b    a Unicode word boundary (\w on one side and \W, \A, or \z on other)
-//! \B    a Unicode word boundary
+//! \B    not a Unicode word boundary
 //! </pre>
 //!
 //! ## Grouping and flags
 //!
 //! <pre class="rust">
 //! (exp)          numbered capture group (indexed by opening parenthesis)
-//! (?P&lt;name&gt;exp)  named capture group (also numbered)
+//! (?P&lt;name&gt;exp)  named (also numbered) capture group (allowed chars: [_0-9a-zA-Z])
 //! (?:exp)        non-capturing group
 //! (?flags)       set flags within current group
 //! (?flags:exp)   set flags for exp (non-capturing)
@@ -263,7 +269,7 @@
 //! i     case insensitive
 //! m     multi-line mode: ^ and $ match begin/end of line
 //! s     allow . to match \n
-//! U     swap the meaning of `x*` and `x*?`
+//! U     swap the meaning of x* and x*?
 //! </pre>
 //!
 //! Here's an example that matches case insensitively for only part of the
