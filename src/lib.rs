@@ -364,8 +364,6 @@ extern crate stdtest = "test";
 #[cfg(test)]
 extern crate rand;
 
-#[phase(syntax, link)] extern crate log;
-
 // During tests, this links with the `regexp` crate so that the `regexp!` macro
 // can be tested.
 #[cfg(test, not(stage1))]
