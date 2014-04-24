@@ -45,6 +45,7 @@ use regex::native::{
 
 /// For the `regex!` syntax extension. Do not use.
 #[macro_registrar]
+#[doc(hidden)]
 pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
     let expander = ~BasicMacroExpander { expander: native, span: None };
     register(token::intern("regex"), NormalTT(expander, None))
