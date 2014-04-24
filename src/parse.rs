@@ -37,7 +37,7 @@ pub struct Error {
 
 impl fmt::Show for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f.buf, "Regexp syntax error near position {}: {}",
+        write!(f.buf, "Regex syntax error near position {}: {}",
                self.pos, self.msg)
     }
 }
@@ -48,8 +48,8 @@ impl fmt::Show for Error {
 /// It is cloneable so that expressions can be repeated for the counted
 /// repetition feature. (No other copying is done.)
 ///
-/// Note that this representation prevents one from reproducing the regexp as
-/// it was typed. (But it could be used to reproduce an equivalent regexp.)
+/// Note that this representation prevents one from reproducing the regex as
+/// it was typed. (But it could be used to reproduce an equivalent regex.)
 #[deriving(Show, Clone)]
 pub enum Ast {
     Nothing,
@@ -1009,7 +1009,7 @@ static ASCII_CLASSES: NamedClasses = &[
     // [:upper:]      upper case (== [A-Z])
     // [:word:]       word characters (== [0-9A-Za-z_])
     // [:xdigit:]     hex digit (== [0-9A-Fa-f])
-    // Taken from: http://golang.org/pkg/regexp/syntax/
+    // Taken from: http://golang.org/pkg/regex/syntax/
     ("alnum", &[('0', '9'), ('A', 'Z'), ('a', 'z')]),
     ("alpha", &[('A', 'Z'), ('a', 'z')]),
     ("ascii", &[('\x00', '\x7F')]),

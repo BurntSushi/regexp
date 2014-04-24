@@ -39,13 +39,13 @@ pub fn quote(text: &str) -> ~str {
 /// To find submatches, split or replace text, you'll need to compile an
 /// expression first.
 ///
-/// Note that you should prefer the `regexp!` macro when possible. For example,
-/// `regexp!("...").is_match("...")`.
+/// Note that you should prefer the `regex!` macro when possible. For example,
+/// `regex!("...").is_match("...")`.
 pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
-    Regexp::new(regex).map(|r| r.is_match(text))
+    Regex::new(regex).map(|r| r.is_match(text))
 }
 
-/// Regexp is a compiled regular expression, represented as either a sequence
+/// Regex is a compiled regular expression, represented as either a sequence
 /// of bytecode instructions (dynamic) or as a specialized Rust function
 /// (native). It can be used to search, split
 /// or replace text. All searching is done with an implicit `.*?` at the
@@ -70,42 +70,42 @@ pub fn is_match(regex: &str, text: &str) -> Result<bool, parse::Error> {
 /// Find the location of a US phone number:
 ///
 /// ```rust
-/// # use regexp::Regexp;
-/// let re = match Regexp::new("[0-9]{3}-[0-9]{3}-[0-9]{4}") {
+/// # use regex::Regex;
+/// let re = match Regex::new("[0-9]{3}-[0-9]{3}-[0-9]{4}") {
 ///     Ok(re) => re,
 ///     Err(err) => fail!("{}", err),
 /// };
 /// assert_eq!(re.find("phone: 111-222-3333"), Some((7, 19)));
 /// ```
 ///
-/// You can also use the `regexp!` macro to compile a regular expression when
+/// You can also use the `regex!` macro to compile a regular expression when
 /// you compile your program:
 ///
 /// ```rust
 /// #![feature(phase)]
-/// extern crate regexp;
-/// #[phase(syntax)] extern crate regexp_macros;
+/// extern crate regex;
+/// #[phase(syntax)] extern crate regex_macros;
 ///
 /// fn main() {
-///     let re = regexp!(r"\d+");
+///     let re = regex!(r"\d+");
 ///     assert_eq!(re.find("123 abc"), Some((0, 3)));
 /// }
 /// ```
 ///
-/// Given an incorrect regular expression, `regexp!` will cause the Rust
+/// Given an incorrect regular expression, `regex!` will cause the Rust
 /// compiler to produce a compile time error.
-/// Note that `regexp!` will compile the expression to native Rust code, which
+/// Note that `regex!` will compile the expression to native Rust code, which
 /// makes it much faster when searching text.
-/// More details about the `regexp!` macro can be found in the `regexp` crate
+/// More details about the `regex!` macro can be found in the `regex` crate
 /// documentation.
 #[deriving(Clone)]
 #[allow(visible_private_types)]
-pub struct Regexp {
-    /// The representation of `Regexp` is exported to support the `regexp!`
+pub struct Regex {
+    /// The representation of `Regex` is exported to support the `regex!`
     /// syntax extension. Do not rely on it.
     ///
     /// See the comments for the `program` module in `lib.rs` for a more
-    /// detailed explanation for what `regexp!` requires.
+    /// detailed explanation for what `regex!` requires.
     #[doc(hidden)]
     pub original: ~str,
     #[doc(hidden)]
@@ -114,7 +114,7 @@ pub struct Regexp {
     pub p: MaybeNative,
 }
 
-impl fmt::Show for Regexp {
+impl fmt::Show for Regex {
     /// Shows the original regular expression.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f.buf, "{}", self.original)
@@ -135,21 +135,21 @@ impl Clone for MaybeNative {
     }
 }
 
-impl Regexp {
+impl Regex {
     /// Compiles a dynamic regular expression. Once compiled, it can be
     /// used repeatedly to search, split or replace text in a string.
     ///
-    /// When possible, you should prefer the `regexp!` macro since it is
+    /// When possible, you should prefer the `regex!` macro since it is
     /// safer and always faster.
     ///
     /// If an invalid expression is given, then an error is returned.
-    pub fn new(re: &str) -> Result<Regexp, parse::Error> {
+    pub fn new(re: &str) -> Result<Regex, parse::Error> {
         let ast = try!(parse::parse(re));
         let (prog, names) = Program::new(ast);
-        Ok(Regexp { original: re.to_owned(), names: names, p: Dynamic(prog) })
+        Ok(Regex { original: re.to_owned(), names: names, p: Dynamic(prog) })
     }
 
-    /// Returns true if and only if the regexp matches the string given.
+    /// Returns true if and only if the regex matches the string given.
     ///
     /// # Example
     ///
@@ -158,10 +158,10 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
     /// let text = "I categorically deny having triskaidekaphobia.";
-    /// let matched = regexp!(r"\b\w{13}\b").is_match(text);
+    /// let matched = regex!(r"\b\w{13}\b").is_match(text);
     /// assert!(matched);
     /// # }
     /// ```
@@ -183,10 +183,10 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
     /// let text = "I categorically deny having triskaidekaphobia.";
-    /// let pos = regexp!(r"\b\w{13}\b").find(text);
+    /// let pos = regex!(r"\b\w{13}\b").find(text);
     /// assert_eq!(pos, Some((2, 15)));
     /// # }
     /// ```
@@ -210,10 +210,10 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
     /// let text = "Retroactively relinquishing remunerations is reprehensible.";
-    /// for pos in regexp!(r"\b\w{13}\b").find_iter(text) {
+    /// for pos in regex!(r"\b\w{13}\b").find_iter(text) {
     ///     println!("{}", pos);
     /// }
     /// // Output:
@@ -249,9 +249,9 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!(r"'([^']+)'\s+\((\d{4})\)");
+    /// let re = regex!(r"'([^']+)'\s+\((\d{4})\)");
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
     /// assert_eq!(caps.at(1), "Citizen Kane");
@@ -267,9 +267,9 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
+    /// let re = regex!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
     /// let text = "Not my favorite movie: 'Citizen Kane' (1941).";
     /// let caps = re.captures(text).unwrap();
     /// assert_eq!(caps.name("title"), "Citizen Kane");
@@ -300,9 +300,9 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
+    /// let re = regex!(r"'(?P<title>[^']+)'\s+\((?P<year>\d{4})\)");
     /// let text = "'Citizen Kane' (1941), 'The Wizard of Oz' (1939), 'M' (1931).";
     /// for caps in re.captures_iter(text) {
     ///     println!("Movie: {}, Released: {}", caps.name("title"), caps.name("year"));
@@ -336,15 +336,15 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!(r"[ \t]+");
+    /// let re = regex!(r"[ \t]+");
     /// let fields: Vec<&str> = re.split("a b \t  c\td    e").collect();
     /// assert_eq!(fields, vec!("a", "b", "c", "d", "e"));
     /// # }
     /// ```
-    pub fn split<'r, 't>(&'r self, text: &'t str) -> RegexpSplits<'r, 't> {
-        RegexpSplits {
+    pub fn split<'r, 't>(&'r self, text: &'t str) -> RegexSplits<'r, 't> {
+        RegexSplits {
             finder: self.find_iter(text),
             last: 0,
         }
@@ -366,16 +366,16 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!(r"\W+");
+    /// let re = regex!(r"\W+");
     /// let fields: Vec<&str> = re.splitn("Hey! How are you?", 3).collect();
     /// assert_eq!(fields, vec!("Hey", "How", "are you?"));
     /// # }
     /// ```
     pub fn splitn<'r, 't>(&'r self, text: &'t str, limit: uint)
-                         -> RegexpSplitsN<'r, 't> {
-        RegexpSplitsN {
+                         -> RegexSplitsN<'r, 't> {
+        RegexSplitsN {
             splits: self.split(text),
             cur: 0,
             limit: limit,
@@ -396,9 +396,9 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!("[^01]+");
+    /// let re = regex!("[^01]+");
     /// assert_eq!(re.replace("1078910", "").as_slice(), "1010");
     /// # }
     /// ```
@@ -410,9 +410,9 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
-    /// # use regexp::Captures; fn main() {
-    /// let re = regexp!(r"([^,\s]+),\s+(\S+)");
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
+    /// # use regex::Captures; fn main() {
+    /// let re = regex!(r"([^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
     ///     format!("{} {}", caps.at(2), caps.at(1))
     /// });
@@ -427,9 +427,9 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// let re = regexp!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
+    /// let re = regex!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
     /// assert_eq!(result.as_slice(), "Bruce Springsteen");
     /// # }
@@ -444,11 +444,11 @@ impl Regexp {
     ///
     /// ```rust
     /// # #![feature(phase)]
-    /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+    /// # extern crate regex; #[phase(syntax)] extern crate regex_macros;
     /// # fn main() {
-    /// use regexp::NoExpand;
+    /// use regex::NoExpand;
     ///
-    /// let re = regexp!(r"(?P<last>[^,\s]+),\s+(\S+)");
+    /// let re = regex!(r"(?P<last>[^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
     /// assert_eq!(result.as_slice(), "$2 $last");
     /// # }
@@ -537,12 +537,12 @@ impl<'a> Replacer for |&Captures|: 'a -> ~str {
 ///
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
 /// of the string being split.
-pub struct RegexpSplits<'r, 't> {
+pub struct RegexSplits<'r, 't> {
     finder: FindMatches<'r, 't>,
     last: uint,
 }
 
-impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
+impl<'r, 't> Iterator<&'t str> for RegexSplits<'r, 't> {
     fn next(&mut self) -> Option<&'t str> {
         let text = self.finder.search;
         match self.finder.next() {
@@ -570,13 +570,13 @@ impl<'r, 't> Iterator<&'t str> for RegexpSplits<'r, 't> {
 ///
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
 /// of the string being split.
-pub struct RegexpSplitsN<'r, 't> {
-    splits: RegexpSplits<'r, 't>,
+pub struct RegexSplitsN<'r, 't> {
+    splits: RegexSplits<'r, 't>,
     cur: uint,
     limit: uint,
 }
 
-impl<'r, 't> Iterator<&'t str> for RegexpSplitsN<'r, 't> {
+impl<'r, 't> Iterator<&'t str> for RegexSplitsN<'r, 't> {
     fn next(&mut self) -> Option<&'t str> {
         let text = self.splits.finder.search;
         if self.cur >= self.limit {
@@ -610,7 +610,7 @@ pub struct Captures<'t> {
 }
 
 impl<'t> Captures<'t> {
-    fn new(re: &Regexp, search: &'t str, locs: CaptureLocs)
+    fn new(re: &Regex, search: &'t str, locs: CaptureLocs)
           -> Option<Captures<'t>> {
         if !has_match(&locs) {
             return None
@@ -707,7 +707,7 @@ impl<'t> Captures<'t> {
     pub fn expand(&self, text: &str) -> StrBuf {
         // How evil can you get?
         // FIXME: Don't use regexes for this. It's completely unnecessary.
-        let re = Regexp::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
+        let re = Regex::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
         let text = re.replace_all(text, |refs: &Captures| -> ~str {
             let (pre, name) = (refs.at(1), refs.at(2));
             pre + match from_str::<uint>(name) {
@@ -715,7 +715,7 @@ impl<'t> Captures<'t> {
                 Some(i) => self.at(i).to_owned(),
             }
         });
-        let re = Regexp::new(r"\$\$").unwrap();
+        let re = Regex::new(r"\$\$").unwrap();
         re.replace_all(text.as_slice(), NoExpand("$"))
     }
 }
@@ -777,7 +777,7 @@ impl<'t> Iterator<Option<(uint, uint)>> for SubCapturesPos<'t> {
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
 /// of the matched string.
 pub struct FindCaptures<'r, 't> {
-    re: &'r Regexp,
+    re: &'r Regex,
     search: &'t str,
     last_match: Option<uint>,
     last_end: uint,
@@ -819,7 +819,7 @@ impl<'r, 't> Iterator<Captures<'t>> for FindCaptures<'r, 't> {
 /// `'r` is the lifetime of the compiled expression and `'t` is the lifetime
 /// of the matched string.
 pub struct FindMatches<'r, 't> {
-    re: &'r Regexp,
+    re: &'r Regex,
     search: &'t str,
     last_match: Option<uint>,
     last_end: uint,
@@ -852,11 +852,11 @@ impl<'r, 't> Iterator<(uint, uint)> for FindMatches<'r, 't> {
     }
 }
 
-fn exec(re: &Regexp, which: MatchKind, input: &str) -> CaptureLocs {
+fn exec(re: &Regex, which: MatchKind, input: &str) -> CaptureLocs {
     exec_slice(re, which, input, 0, input.len())
 }
 
-fn exec_slice(re: &Regexp, which: MatchKind,
+fn exec_slice(re: &Regex, which: MatchKind,
               input: &str, s: uint, e: uint) -> CaptureLocs {
     match re.p {
         Dynamic(ref prog) => vm::run(which, prog, input, s, e),

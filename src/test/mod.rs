@@ -10,14 +10,14 @@
 
 #[cfg(not(stage1))]
 #[phase(syntax)]
-extern crate regexp_macros;
+extern crate regex_macros;
 
-// Dirty hack: During stage1, test dynamic regexps. For stage2, we test
-// native regexps.
+// Dirty hack: During stage1, test dynamic regexs. For stage2, we test
+// native regexs.
 #[cfg(stage1)]
-macro_rules! regexp(
+macro_rules! regex(
     ($re:expr) => (
-        match ::regexp::Regexp::new($re) {
+        match ::regex::Regex::new($re) {
             Ok(re) => re,
             Err(err) => fail!("{}", err),
         }

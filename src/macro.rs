@@ -8,10 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! This crate provides the `regexp!` macro. Its use is documented in the
-//! `regexp` crate.
+//! This crate provides the `regex!` macro. Its use is documented in the
+//! `regex` crate.
 
-#![crate_id = "regexp_macros#0.11-pre"]
+#![crate_id = "regex_macros#0.11-pre"]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
 #![experimental]
@@ -22,7 +22,7 @@
 
 #![feature(macro_registrar, managed_boxes, quote)]
 
-extern crate regexp;
+extern crate regex;
 extern crate syntax;
 
 use syntax::ast;
@@ -35,19 +35,19 @@ use syntax::parse;
 use syntax::parse::token;
 use syntax::print::pprust;
 
-use regexp::Regexp;
-use regexp::native::{
+use regex::Regex;
+use regex::native::{
     OneChar, CharClass, Any, Save, Jump, Split,
     Match, EmptyBegin, EmptyEnd, EmptyWordBoundary,
     Program, Dynamic, Native,
     FLAG_NOCASE, FLAG_MULTI, FLAG_DOTNL, FLAG_NEGATED,
 };
 
-/// For the `regexp!` syntax extension. Do not use.
+/// For the `regex!` syntax extension. Do not use.
 #[macro_registrar]
 pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
     let expander = ~BasicMacroExpander { expander: native, span: None };
-    register(token::intern("regexp"), NormalTT(expander, None))
+    register(token::intern("regex"), NormalTT(expander, None))
 }
 
 /// Generates specialized code for the Pike VM for a particular regular
@@ -79,7 +79,7 @@ fn native(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree])
         // error is logged in 'parse' with cx.span_err
         None => return DummyResult::any(sp),
     };
-    let re = match Regexp::new(regex.to_owned()) {
+    let re = match Regex::new(regex.to_owned()) {
         Ok(re) => re,
         Err(err) => {
             cx.span_err(sp, err.to_str());
@@ -136,10 +136,10 @@ impl<'a> NfaGen<'a> {
         let regex = self.original.as_slice();
 
         quote_expr!(self.cx, {
-fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
+fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
             start: uint, end: uint) -> Vec<Option<uint>> {
     #![allow(unused_imports)]
-    use regexp::native::{
+    use regex::native::{
         MatchKind, Exists, Location, Submatches,
         StepState, StepMatchEarlyReturn, StepMatch, StepContinue,
         CharReader, find_prefix,
@@ -249,7 +249,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
                 // trick is described in more detail here:
                 // http://research.swtch.com/sparse
                 // The idea here is to avoid initializing threads that never
-                // need to be initialized, particularly for larger regexps with
+                // need to be initialized, particularly for larger regexs with
                 // a lot of instructions.
                 queue: unsafe { ::std::mem::uninit() },
                 sparse: unsafe { ::std::mem::uninit() },
@@ -307,10 +307,10 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     }
 }
 
-::regexp::Regexp {
+::regex::Regex {
     original: ~$regex,
     names: ~$cap_names,
-    p: ::regexp::native::Native(exec),
+    p: ::regex::native::Native(exec),
 }
         })
     }
@@ -536,7 +536,7 @@ fn exec<'t>(which: ::regexp::native::MatchKind, input: &'t str,
     }
 
     // Generates code for checking a literal prefix of the search string.
-    // The code is only generated if the regexp *has* a literal prefix.
+    // The code is only generated if the regex *has* a literal prefix.
     // Otherwise, a no-op is returned.
     fn check_prefix(&self) -> @ast::Expr {
         if self.prog.prefix.len() == 0 {

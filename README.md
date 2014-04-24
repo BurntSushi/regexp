@@ -13,7 +13,7 @@ There are some other tests that makes sure the parser rejects invalid input
 without crashing (or blowing the stack).
 
 Public API is in progress but in a reasonable state: 
-http://burntsushi.net/rustdoc/regexp/
+http://burntsushi.net/rustdoc/regex/
 
 Much of this library (from parsing all the way to the VM itself) is using ideas 
 from Russ Cox in his

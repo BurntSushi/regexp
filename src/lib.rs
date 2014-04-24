@@ -17,7 +17,7 @@
 //!
 //! This crate's documentation provides some simple examples, describes Unicode
 //! support and exhaustively lists the supported syntax. For more specific
-//! details on the API, please see the documentation for the `Regexp` type.
+//! details on the API, please see the documentation for the `Regex` type.
 //!
 //! # First example: find a date
 //!
@@ -26,8 +26,8 @@
 //! to confirm that some text resembles a date:
 //!
 //! ```rust
-//! use regexp::Regexp;
-//! let re = match Regexp::new(r"^\d{4}-\d{2}-\d{2}$") {
+//! use regex::Regex;
+//! let re = match Regex::new(r"^\d{4}-\d{2}-\d{2}$") {
 //!     Ok(re) => re,
 //!     Err(err) => fail!("{}", err),
 //! };
@@ -44,46 +44,46 @@
 //! not process any escape sequences. For example, `"\\d"` is the same
 //! expression as `r"\d"`.
 //!
-//! # The `regexp!` macro
+//! # The `regex!` macro
 //!
 //! Rust's compile time meta-programming facilities provide a way to write a
-//! `regexp!` macro which compiles regular expressions *when your program
-//! compiles*. Said differently, if you only use `regexp!` to build regular
+//! `regex!` macro which compiles regular expressions *when your program
+//! compiles*. Said differently, if you only use `regex!` to build regular
 //! expressions in your program, then your program cannot compile with an
-//! invalid regular expression. Moreover, the `regexp!` macro compiles the
+//! invalid regular expression. Moreover, the `regex!` macro compiles the
 //! given expression to native Rust code, which makes it much faster for
 //! searching text.
 //!
-//! Since `regexp!` provides compiled regular expressions that are both safer
+//! Since `regex!` provides compiled regular expressions that are both safer
 //! and faster to use, you should use them whenever possible. The only
 //! requirement for using them is that you have a string literal corresponding
 //! to your expression. Otherwise, it is indistinguishable from an expression
-//! compiled at runtime with `Regexp::new`.
+//! compiled at runtime with `Regex::new`.
 //!
-//! To use the `regexp!` macro, you must enable the `phase` feature and import
-//! the `regexp_macros` crate as a syntax extension:
+//! To use the `regex!` macro, you must enable the `phase` feature and import
+//! the `regex_macros` crate as a syntax extension:
 //!
 //! ```rust
 //! #![feature(phase)]
 //! #[phase(syntax)]
-//! extern crate regexp_macros;
-//! extern crate regexp;
+//! extern crate regex_macros;
+//! extern crate regex;
 //!
 //! fn main() {
-//!     let re = regexp!(r"^\d{4}-\d{2}-\d{2}$");
+//!     let re = regex!(r"^\d{4}-\d{2}-\d{2}$");
 //!     assert_eq!(re.is_match("2014-01-01"), true);
 //! }
 //! ```
 //!
-//! There are a few things worth mentioning about using the `regexp!` macro.
-//! Firstly, the `regexp!` macro *only* accepts string *literals*.
-//! Secondly, the `regexp` crate *must* be linked with the name `regexp` since
-//! the generated code depends on finding symbols in the `regexp` crate.
+//! There are a few things worth mentioning about using the `regex!` macro.
+//! Firstly, the `regex!` macro *only* accepts string *literals*.
+//! Secondly, the `regex` crate *must* be linked with the name `regex` since
+//! the generated code depends on finding symbols in the `regex` crate.
 //!
-//! The only downside of using the `regexp!` macro is that it can increase the
+//! The only downside of using the `regex!` macro is that it can increase the
 //! size of your program's binary since it generates specialized Rust code.
 //! The extra size probably won't be significant for a small number of
-//! expressions, but 100+ calls to `regexp!` will probably result in a
+//! expressions, but 100+ calls to `regex!` will probably result in a
 //! noticeably bigger binary.
 //!
 //! # Example: iterating over capture groups
@@ -95,9 +95,9 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+//! # extern crate regex; #[phase(syntax)] extern crate regex_macros;
 //! # fn main() {
-//! let re = regexp!(r"(\d{4})-(\d{2})-(\d{2})");
+//! let re = regex!(r"(\d{4})-(\d{2})-(\d{2})");
 //! let text = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! for cap in re.captures_iter(text) {
 //!     println!("Month: {} Day: {} Year: {}", cap.at(2), cap.at(3), cap.at(1));
@@ -121,9 +121,9 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+//! # extern crate regex; #[phase(syntax)] extern crate regex_macros;
 //! # fn main() {
-//! let re = regexp!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
+//! let re = regex!(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})");
 //! let before = "2012-03-14, 2013-01-01 and 2014-07-05";
 //! let after = re.replace_all(before, "$m/$d/$y");
 //! assert_eq!(after.as_slice(), "03/14/2012, 01/01/2013 and 07/05/2014");
@@ -132,7 +132,7 @@
 //!
 //! The `replace` methods are actually polymorphic in the replacement, which
 //! provides more flexibility than is seen here. (See the documentation for
-//! `Regexp::replace` for more details.)
+//! `Regex::replace` for more details.)
 //!
 //! # Pay for what you use
 //!
@@ -167,9 +167,9 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+//! # extern crate regex; #[phase(syntax)] extern crate regex_macros;
 //! # fn main() {
-//! let re = regexp!(r"(?i)Δ+");
+//! let re = regex!(r"(?i)Δ+");
 //! assert_eq!(re.find("ΔδΔ"), Some((0, 6)));
 //! # }
 //! ```
@@ -180,9 +180,9 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+//! # extern crate regex; #[phase(syntax)] extern crate regex_macros;
 //! # fn main() {
-//! let re = regexp!(r"[\pN\p{Greek}\p{Cherokee}]+");
+//! let re = regex!(r"[\pN\p{Greek}\p{Cherokee}]+");
 //! assert_eq!(re.find("abcΔᎠβⅠᏴγδⅡxyz"), Some((3, 23)));
 //! # }
 //! ```
@@ -277,9 +277,9 @@
 //!
 //! ```rust
 //! # #![feature(phase)]
-//! # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
+//! # extern crate regex; #[phase(syntax)] extern crate regex_macros;
 //! # fn main() {
-//! let re = regexp!(r"(?i)a+(?-i)b+");
+//! let re = regex!(r"(?i)a+(?-i)b+");
 //! let cap = re.captures("AaAaAbbBBBb").unwrap();
 //! assert_eq!(cap.at(0), "AaAaAbb");
 //! # }
@@ -352,7 +352,7 @@
 //! characters in the search text and `m` is the number of instructions in a
 //! compiled expression.
 
-#![crate_id = "regexp#0.11-pre"]
+#![crate_id = "regex#0.11-pre"]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
 #![experimental]
@@ -370,15 +370,15 @@ extern crate stdtest = "test";
 #[cfg(test)]
 extern crate rand;
 
-// During tests, this links with the `regexp` crate so that the `regexp!` macro
+// During tests, this links with the `regex` crate so that the `regex!` macro
 // can be tested.
 #[cfg(test)]
-extern crate regexp;
+extern crate regex;
 
 pub use parse::Error;
-pub use re::{Regexp, Captures, SubCaptures, SubCapturesPos};
+pub use re::{Regex, Captures, SubCaptures, SubCapturesPos};
 pub use re::{FindCaptures, FindMatches};
-pub use re::{Replacer, NoExpand, RegexpSplits, RegexpSplitsN};
+pub use re::{Replacer, NoExpand, RegexSplits, RegexSplitsN};
 pub use re::{quote, is_match};
 
 mod compile;
@@ -389,20 +389,20 @@ mod vm;
 #[cfg(test)]
 mod test;
 
-/// The `program` module exists to support the `regexp!` macro. Do not use.
+/// The `program` module exists to support the `regex!` macro. Do not use.
 #[doc(hidden)]
 pub mod native {
     // Exporting this stuff is bad form, but it's necessary for two reasons.
-    // Firstly, the `regexp!` syntax extension is in a different crate and
-    // requires access to the representation of a regexp (particularly the
+    // Firstly, the `regex!` syntax extension is in a different crate and
+    // requires access to the representation of a regex (particularly the
     // instruction set) in order to compile to native Rust. This could be
-    // mitigated if `regexp!` was defined in the same crate, but this has
+    // mitigated if `regex!` was defined in the same crate, but this has
     // undesirable consequences (such as requiring a dependency on
     // `libsyntax`).
     //
-    // Secondly, the code generated generated by `regexp!` must *also* be able
+    // Secondly, the code generated generated by `regex!` must *also* be able
     // to access various functions in this crate to reduce code duplication
-    // and to provide a value with precisely the same `Regexp` type in this
+    // and to provide a value with precisely the same `Regex` type in this
     // crate. This, AFAIK, is impossible to mitigate.
     //
     // On the bright side, `rustdoc` lets us hide this from the public API

@@ -11,37 +11,37 @@
 use rand::{Rng, task_rng};
 use stdtest::Bencher;
 use std::str;
-use regexp::{Regexp, NoExpand};
+use regex::{Regex, NoExpand};
 
-fn bench_assert_match(b: &mut Bencher, re: Regexp, text: &str) {
+fn bench_assert_match(b: &mut Bencher, re: Regex, text: &str) {
     b.iter(|| if !re.is_match(text) { fail!("no match") });
 }
 
 #[bench]
 fn no_exponential(b: &mut Bencher) {
     let n = 100;
-    let re = Regexp::new("a?".repeat(n) + "a".repeat(n)).unwrap();
+    let re = Regex::new("a?".repeat(n) + "a".repeat(n)).unwrap();
     let text = "a".repeat(n);
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn literal(b: &mut Bencher) {
-    let re = regexp!("y");
+    let re = regex!("y");
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn not_literal(b: &mut Bencher) {
-    let re = regexp!(".y");
+    let re = regex!(".y");
     let text = "x".repeat(50) + "y";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn match_class(b: &mut Bencher) {
-    let re = regexp!("[abcdw]");
+    let re = regex!("[abcdw]");
     let text = "xxxx".repeat(20) + "w";
     bench_assert_match(b, re, text);
 }
@@ -49,14 +49,14 @@ fn match_class(b: &mut Bencher) {
 #[bench]
 fn match_class_in_range(b: &mut Bencher) {
     // 'b' is between 'a' and 'c', so the class range checking doesn't help.
-    let re = regexp!("[ac]");
+    let re = regex!("[ac]");
     let text = "bbbb".repeat(20) + "c";
     bench_assert_match(b, re, text);
 }
 
 #[bench]
 fn replace_all(b: &mut Bencher) {
-    let re = regexp!("[cjrw]");
+    let re = regex!("[cjrw]");
     let text = "abcdefghijklmnopqrstuvwxyz";
     // FIXME: This isn't using the $name expand stuff.
     // It's possible RE2/Go is using it, but currently, the expand in this
@@ -66,70 +66,70 @@ fn replace_all(b: &mut Bencher) {
 
 #[bench]
 fn anchored_literal_short_non_match(b: &mut Bencher) {
-    let re = regexp!("^zbc(d|e)");
+    let re = regex!("^zbc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn anchored_literal_long_non_match(b: &mut Bencher) {
-    let re = regexp!("^zbc(d|e)");
+    let re = regex!("^zbc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn anchored_literal_short_match(b: &mut Bencher) {
-    let re = regexp!("^.bc(d|e)");
+    let re = regex!("^.bc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn anchored_literal_long_match(b: &mut Bencher) {
-    let re = regexp!("^.bc(d|e)");
+    let re = regex!("^.bc(d|e)");
     let text = "abcdefghijklmnopqrstuvwxyz".repeat(15);
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_a(b: &mut Bencher) {
-    let re = regexp!("^.bc(d|e)*$");
+    let re = regex!("^.bc(d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_a_not(b: &mut Bencher) {
-    let re = regexp!(".bc(d|e)*$");
+    let re = regex!(".bc(d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_b(b: &mut Bencher) {
-    let re = regexp!("^.bc(?:d|e)*$");
+    let re = regex!("^.bc(?:d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_short_b_not(b: &mut Bencher) {
-    let re = regexp!(".bc(?:d|e)*$");
+    let re = regex!(".bc(?:d|e)*$");
     let text = "abcddddddeeeededd";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_long_prefix(b: &mut Bencher) {
-    let re = regexp!("^abcdefghijklmnopqrstuvwxyz.*$");
+    let re = regex!("^abcdefghijklmnopqrstuvwxyz.*$");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
 
 #[bench]
 fn one_pass_long_prefix_not(b: &mut Bencher) {
-    let re = regexp!("^.bcdefghijklmnopqrstuvwxyz.*$");
+    let re = regex!("^.bcdefghijklmnopqrstuvwxyz.*$");
     let text = "abcdefghijklmnopqrstuvwxyz";
     b.iter(|| re.is_match(text));
 }
@@ -145,10 +145,10 @@ macro_rules! throughput(
     );
 )
 
-fn easy0() -> Regexp { regexp!("ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
-fn easy1() -> Regexp { regexp!("A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$") }
-fn medium() -> Regexp { regexp!("[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
-fn hard() -> Regexp { regexp!("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+fn easy0() -> Regex { regex!("ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+fn easy1() -> Regex { regex!("A[AB]B[BC]C[CD]D[DE]E[EF]F[FG]G[GH]H[HI]I[IJ]J$") }
+fn medium() -> Regex { regex!("[XYZ]ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
+fn hard() -> Regex { regex!("[ -~]*ABCDEFGHIJKLMNOPQRSTUVWXYZ$") }
 
 fn gen_text(n: uint) -> ~str {
     let mut rng = task_rng();

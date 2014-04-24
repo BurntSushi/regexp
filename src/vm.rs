@@ -19,7 +19,7 @@
 //
 // Cox suggests that a DFA ought to be used to answer "does this match" and
 // "where does it match" questions. (In the latter, the starting position of
-// the match is computed by executing the regexp backwards.) Cox also suggests
+// the match is computed by executing the regex backwards.) Cox also suggests
 // that a DFA should be run when asking "where are the submatches", which can
 // 1) quickly answer "no" is there's no match and 2) discover the substring
 // that matches, which means running the NFA on smaller input.
@@ -31,7 +31,7 @@
 //
 // AFAIK, the DFA/NFA approach is implemented in RE2/C++ but *not* in RE2/Go.
 //
-// [1] - http://swtch.com/~rsc/regexp/regexp3.html
+// [1] - http://swtch.com/~rsc/regex/regex3.html
 
 use std::cmp;
 use std::mem;

@@ -9,7 +9,7 @@
 // except according to those terms.
 
 // Enable this to squash warnings due to exporting pieces of the representation
-// for use with the regexp! macro. See lib.rs for explanation.
+// for use with the regex! macro. See lib.rs for explanation.
 #![allow(visible_private_types)]
 
 use std::cmp;
@@ -76,7 +76,7 @@ pub enum Inst {
 ///
 /// All of the data in a compiled expression is wrapped in "MaybeStatic" or
 /// "MaybeOwned" types so that a `Program` can be represented as static data.
-/// (This makes it convenient and efficient for use with the `regexp!` macro.)
+/// (This makes it convenient and efficient for use with the `regex!` macro.)
 #[deriving(Clone)]
 pub struct Program {
     /// A sequence of instructions.
@@ -88,7 +88,7 @@ pub struct Program {
 }
 
 impl Program {
-    /// Compiles a Regexp given its AST.
+    /// Compiles a Regex given its AST.
     pub fn new(ast: ~parse::Ast) -> (Program, ~[Option<~str>]) {
         let mut c = Compiler {
             insts: Vec::with_capacity(100),
