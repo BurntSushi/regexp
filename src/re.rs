@@ -399,7 +399,7 @@ impl Regexp {
     /// # extern crate regexp; #[phase(syntax)] extern crate regexp_macros;
     /// # fn main() {
     /// let re = regexp!("[^01]+");
-    /// assert_eq!(re.replace("1078910", ""), ~"1010");
+    /// assert_eq!(re.replace("1078910", "").as_slice(), "1010");
     /// # }
     /// ```
     ///
@@ -416,7 +416,7 @@ impl Regexp {
     /// let result = re.replace("Springsteen, Bruce", |caps: &Captures| {
     ///     format!("{} {}", caps.at(2), caps.at(1))
     /// });
-    /// assert_eq!(result, ~"Bruce Springsteen");
+    /// assert_eq!(result.as_slice(), "Bruce Springsteen");
     /// # }
     /// ```
     ///
@@ -431,7 +431,7 @@ impl Regexp {
     /// # fn main() {
     /// let re = regexp!(r"(?P<last>[^,\s]+),\s+(?P<first>\S+)");
     /// let result = re.replace("Springsteen, Bruce", "$first $last");
-    /// assert_eq!(result, ~"Bruce Springsteen");
+    /// assert_eq!(result.as_slice(), "Bruce Springsteen");
     /// # }
     /// ```
     ///
@@ -450,7 +450,7 @@ impl Regexp {
     ///
     /// let re = regexp!(r"(?P<last>[^,\s]+),\s+(\S+)");
     /// let result = re.replace("Springsteen, Bruce", NoExpand("$2 $last"));
-    /// assert_eq!(result, ~"$2 $last");
+    /// assert_eq!(result.as_slice(), "$2 $last");
     /// # }
     /// ```
     pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> StrBuf {
