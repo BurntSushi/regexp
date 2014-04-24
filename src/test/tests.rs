@@ -34,24 +34,24 @@ macro_rules! replace(
         #[test]
         fn $name() {
             let re = regexp!($re);
-            assert_eq!(re.$which($search, $replace), $result);
+            assert_eq!(re.$which($search, $replace), StrBuf::from_str($result));
         }
     );
 )
 
-replace!(rep_first, replace, r"\d", "age: 26", "Z", ~"age: Z6")
-replace!(rep_plus, replace, r"\d+", "age: 26", "Z", ~"age: Z")
-replace!(rep_all, replace_all, r"\d", "age: 26", "Z", ~"age: ZZ")
-replace!(rep_groups, replace, r"(\S+)\s+(\S+)", "w1 w2", "$2 $1", ~"w2 w1")
+replace!(rep_first, replace, r"\d", "age: 26", "Z", "age: Z6")
+replace!(rep_plus, replace, r"\d+", "age: 26", "Z", "age: Z")
+replace!(rep_all, replace_all, r"\d", "age: 26", "Z", "age: ZZ")
+replace!(rep_groups, replace, r"(\S+)\s+(\S+)", "w1 w2", "$2 $1", "w2 w1")
 replace!(rep_double_dollar, replace,
-         r"(\S+)\s+(\S+)", "w1 w2", "$2 $$1", ~"w2 $1")
+         r"(\S+)\s+(\S+)", "w1 w2", "$2 $$1", "w2 $1")
 replace!(rep_no_expand, replace,
-         r"(\S+)\s+(\S+)", "w1 w2", NoExpand("$2 $1"), ~"$2 $1")
+         r"(\S+)\s+(\S+)", "w1 w2", NoExpand("$2 $1"), "$2 $1")
 replace!(rep_named, replace_all,
          r"(?P<first>\S+)\s+(?P<last>\S+)(?P<space>\s*)",
-         "w1 w2 w3 w4", "$last $first$space", ~"w2 w1 w4 w3")
+         "w1 w2 w3 w4", "$last $first$space", "w2 w1 w4 w3")
 replace!(rep_trim, replace_all, "^[ \t]+|[ \t]+$", " \t  trim me\t   \t",
-         "", ~"trim me")
+         "", "trim me")
 
 macro_rules! noparse(
     ($name:ident, $re:expr) => (

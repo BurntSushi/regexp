@@ -17,6 +17,7 @@ extern crate regexp;
 #[phase(syntax)]extern crate regexp_macros;
 extern crate sync;
 
+use std::io;
 use regexp::{NoExpand, Regexp};
 use sync::Arc;
 
@@ -29,15 +30,16 @@ fn count_matches(seq: &str, variant: &Regexp) -> int {
 }
 
 fn main() {
-    let mut seq = if std::os::getenv("RUST_BENCH").is_some() {
-        let fd = std::io::File::open(&Path::new("shootout-k-nucleotide.data"));
-        std::io::BufferedReader::new(fd).read_to_str().unwrap()
+    let mut rdr = if std::os::getenv("RUST_BENCH").is_some() {
+        let fd = io::File::open(&Path::new("shootout-k-nucleotide.data"));
+        ~io::BufferedReader::new(fd) as ~io::Reader
     } else {
-        std::io::stdin().read_to_str().unwrap()
+        ~io::stdin() as ~io::Reader
     };
+    let mut seq = StrBuf::from_str(rdr.read_to_str().unwrap());
     let ilen = seq.len();
 
-    seq = regexp!(">[^\n]*\n|\n").replace_all(seq, NoExpand(""));
+    seq = regexp!(">[^\n]*\n|\n").replace_all(seq.as_slice(), NoExpand(""));
     let seq_arc = Arc::new(seq.clone()); // copy before it moves
     let clen = seq.len();
 
@@ -57,7 +59,7 @@ fn main() {
         ];
         let mut seq = seq;
         for (re, replacement) in substs.move_iter() {
-            seq = re.replace_all(seq, NoExpand(replacement));
+            seq = re.replace_all(seq.as_slice(), NoExpand(replacement));
         }
         seq.len()
     });
@@ -78,7 +80,7 @@ fn main() {
         let seq_arc_copy = seq_arc.clone();
         variant_strs.push(variant.to_str().to_owned());
         counts.push(sync::Future::spawn(proc() {
-            count_matches(*seq_arc_copy, &variant)
+            count_matches(seq_arc_copy.as_slice(), &variant)
         }));
     }
 

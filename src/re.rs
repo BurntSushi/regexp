@@ -9,15 +9,9 @@
 // except according to those terms.
 
 use collections::HashMap;
-use std::cast;
 use std::fmt;
 use std::from_str::from_str;
 use std::str::{MaybeOwned, Owned, Slice};
-
-use std::mem;
-use std::ptr;
-use std::rt::global_heap::malloc_raw;
-use RawVec = std::raw::Vec;
 
 use compile::Program;
 use parse;
@@ -459,7 +453,7 @@ impl Regexp {
     /// assert_eq!(result, ~"$2 $last");
     /// # }
     /// ```
-    pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+    pub fn replace<R: Replacer>(&self, text: &str, rep: R) -> StrBuf {
         self.replacen(text, 1, rep)
     }
 
@@ -469,7 +463,7 @@ impl Regexp {
     ///
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement string.
-    pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> ~str {
+    pub fn replace_all<R: Replacer>(&self, text: &str, rep: R) -> StrBuf {
         self.replacen(text, 0, rep)
     }
 
@@ -480,7 +474,7 @@ impl Regexp {
     /// See the documentation for `replace` for details on how to access
     /// submatches in the replacement string.
     pub fn replacen<R: Replacer>
-                   (&self, text: &str, limit: uint, mut rep: R) -> ~str {
+                   (&self, text: &str, limit: uint, mut rep: R) -> StrBuf {
         let mut new = StrBuf::with_capacity(text.len());
         let mut last_match = 0u;
         let mut i = 0;
@@ -497,33 +491,7 @@ impl Regexp {
             new.push_str(rep.reg_replace(&cap).as_slice());
             last_match = e;
         }
-        new.push_str(text.slice(last_match, text.len()));
-
-        // The lengths we will go to avoid allocation.
-        // This has a *dramatic* affect on the regex-dna benchmark (and indeed,
-        // any code that uses 'replace' on a large corpus of text multiple
-        // times). The trick is to avoid the obscene amount of allocation
-        // currently done in slice::from_iter. I've been promised that DST will
-        // fix this.
-        //
-        // The following is based on the code in slice::from_iter, but
-        // shortened since we know we're dealing with bytes. The key is that
-        // we already have a Vec<u8>, so there's no reason to re-collect it
-        // (which is what from_iter currently does).
-        //
-        // FIXME #12938: This code *should* be `new.into_owned()`.
-        let mut xs = new.into_bytes();
-        let size = mem::size_of::<RawVec<()>>().checked_add(&xs.len());
-        let size = size.expect("overflow in replacen()");
-        unsafe {
-            let ret = malloc_raw(size) as *mut RawVec<()>;
-            (*ret).fill = xs.len();
-            (*ret).alloc = xs.len();
-            ptr::copy_nonoverlapping_memory(
-                &mut (*ret).data as *mut _ as *mut u8, xs.as_ptr(), xs.len());
-            xs.set_len(0);
-            cast::transmute(ret)
-        }
+        new.append(text.slice(last_match, text.len()))
     }
 }
 
@@ -555,13 +523,13 @@ impl<'t> Replacer for NoExpand<'t> {
 
 impl<'t> Replacer for &'t str {
     fn reg_replace<'a>(&'a mut self, caps: &Captures) -> MaybeOwned<'a> {
-        Owned(caps.expand(*self))
+        Owned(caps.expand(*self).into_owned())
     }
 }
 
 impl<'a> Replacer for |&Captures|: 'a -> ~str {
     fn reg_replace<'r>(&'r mut self, caps: &Captures) -> MaybeOwned<'r> {
-        Owned((*self)(caps))
+        Owned((*self)(caps).into_owned())
     }
 }
 
@@ -736,7 +704,7 @@ impl<'t> Captures<'t> {
     /// isn't a valid index), then it is replaced with the empty string.
     ///
     /// To write a literal `$` use `$$`.
-    pub fn expand(&self, text: &str) -> ~str {
+    pub fn expand(&self, text: &str) -> StrBuf {
         // How evil can you get?
         // FIXME: Don't use regexes for this. It's completely unnecessary.
         let re = Regexp::new(r"(^|[^$]|\b)\$(\w+)").unwrap();
@@ -747,7 +715,8 @@ impl<'t> Captures<'t> {
                 Some(i) => self.at(i).to_owned(),
             }
         });
-        text.replace("$$", "$")
+        let re = Regexp::new(r"\$\$").unwrap();
+        re.replace_all(text.as_slice(), NoExpand("$"))
     }
 }
 
