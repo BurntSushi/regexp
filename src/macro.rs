@@ -12,7 +12,6 @@
 //! `regex` crate.
 
 #![crate_id = "regex_macros#0.11-pre"]
-#![crate_type = "rlib"]
 #![crate_type = "dylib"]
 #![experimental]
 #![license = "MIT/ASL2"]
