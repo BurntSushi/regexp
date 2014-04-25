@@ -386,8 +386,7 @@ mod parse;
 mod re;
 mod vm;
 
-// FIXME(#13725) windows needs fixing.
-#[cfg(test, not(windows))]
+#[cfg(test)]
 mod test;
 
 /// The `program` module exists to support the `regex!` macro. Do not use.
