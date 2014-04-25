@@ -519,6 +519,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
                 end = end.to_uppercase();
             }
             ast::Arm {
+                attrs: vec!(),
                 pats: vec!(@ast::Pat{
                     id: ast::DUMMY_NODE_ID,
                     span: self.sp,
@@ -573,6 +574,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     // `body`.
     fn arm_inst(&self, pc: uint, body: @ast::Expr) -> ast::Arm {
         ast::Arm {
+            attrs: vec!(),
             pats: vec!(@ast::Pat{
                 id: ast::DUMMY_NODE_ID,
                 span: self.sp,
@@ -586,6 +588,7 @@ fn exec<'t>(which: ::regex::native::MatchKind, input: &'t str,
     // Creates a wild-card match arm with the expression `body`.
     fn wild_arm_expr(&self, body: @ast::Expr) -> ast::Arm {
         ast::Arm {
+            attrs: vec!(),
             pats: vec!(@ast::Pat{
                 id: ast::DUMMY_NODE_ID,
                 span: self.sp,
