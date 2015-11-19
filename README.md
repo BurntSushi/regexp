@@ -1,7 +1,3 @@
-This has now been
-[merged into the Rust 
-distribution](http://static.rust-lang.org/doc/master/regex/index.html).
-Therefore, you should not use this repository.
+Initial regexp code for [Rust's regex crate](https://github.com/rust-lang-nursery/regex).
 
-I may still use this repo as a testbed.
-
+Do not use.
